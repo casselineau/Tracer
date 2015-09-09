@@ -7,8 +7,6 @@ Blocking and shading are identified while ray-traciong and stored for each helio
 
 
 '''
-import traits.api as t_api
-import traitsui.api as tui
 from tracer.CoIn_rendering.rendering import *
 
 from tracer.ray_bundle import RayBundle, concatenate_rays
@@ -17,7 +15,7 @@ from tracer.assembly import Assembly
 from tracer.spatial_geometry import rotx, roty, rotz, rotation_to_z
 from tracer.tracer_engine import TracerEngine
 
-from tracer_engine_mp import TracerEngineMP
+from tracer.tracer_engine_mp import TracerEngineMP
 
 from tracer.models.one_sided_mirror import one_sided_receiver
 from tracer.models.heliostat_field import HeliostatField, radial_stagger, solar_vector

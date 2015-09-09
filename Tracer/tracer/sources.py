@@ -337,7 +337,7 @@ def square_bundle(num_rays, center, direction, width):
     rayb.set_directions(directions)
     return rayb
 
-def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, rays_in=True):
+def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, rays_in=True, procs=1):
     '''
     Generate a frustum shaped lambertian source with randomly situated rays to compute view factors. The overall energy of the bundle is 1.
 
@@ -389,12 +389,12 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, rays_in=True):
     vertices_global = N.dot(perp_rot, vertices_local)
     directions = N.dot(perp_rot, local_unit)
 
-    energy = N.ones(num_rays)/num_rays
+    energy = N.ones(num_rays)/num_rays/procs
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
     return rayb
 
-def vf_cylinder_bundle(num_rays, rc, lc, center, direction, rays_in=True):
+def vf_cylinder_bundle(num_rays, rc, lc, center, direction, rays_in=True, procs=1):
     '''
     Generate a cylinder shaped lambertian source with randomly situated rays to compute view factors. The overall energy of the bundle is 1.
 
@@ -441,7 +441,7 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, rays_in=True):
     plt.hist(vertices_local[2,:]/(N.sqrt(vertices_local[0,:]**2.+vertices_local[1,:]**2.)))
     plt.show()
     '''
-    energy = N.ones(num_rays)/num_rays
+    energy = N.ones(num_rays)/num_rays/procs
 
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 

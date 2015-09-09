@@ -10,7 +10,7 @@ from tracer.optics_callables import *
 from tracer.object import *
 from tracer.spatial_geometry import *
 from tracer.sources import *
-from tracer.tracer_engine import *
+from tracer.tracer_engine_mp import *
 from tracer.CoIn_rendering.rendering import *
 
 import time
@@ -24,9 +24,10 @@ class RTVF():
 	def __init__(self, num_rays=10000, precision=0.01):
 		self.num_rays = num_rays
 		self.precision = precision
-		self.A = Assembly() # VF scene assembly
 
-		self.stdev_store = []
+		self.VF_esperance_store = []
+		self.stdev_store_VF = []
+		self.stdev_store_reciprocity = []
 				
 	def reset_opt(self):
 		'''
@@ -35,7 +36,6 @@ class RTVF():
 		S = self.A.get_surfaces()
 		for i in xrange(len(S)):
 			S[i].get_optics_manager().reset()
-
 	
 	def test_precision(self):
 		'''
@@ -53,13 +53,35 @@ class RTVF():
 
 		self.stdev_VF = N.sqrt(self.Qsum/(self.p))
 		self.stdev_reciprocity = VF_reciprocity/((N.ones(N.shape(self.VF))*N.vstack(self.areas)+N.ones(N.shape(self.VF))*N.hstack(self.areas))/2.)
-		#self.stdev_store.append(self.stdev_reciprocity)
+		self.VF_esperance_store.append(self.VF_esperance)
+		self.stdev_store_VF.append(self.stdev_VF)
+		self.stdev_store_reciprocity.append(self.stdev_reciprocity)
 
-		stdev_test = self.stdev_VF<=(self.precision*self.VF_esperance/3.)
-		reciprocity_test = self.stdev_reciprocity<=(2.*self.precision)
-
-		self.progress = (N.logical_not(N.logical_and(stdev_test, reciprocity_test))).any(axis=1)
+		stdev_test = self.stdev_VF <= (self.precision*self.VF_esperance/3.)
+		#print stdev_test
+		#print self.stdev_VF[~stdev_test]
+		#print self.VF_esperance[~stdev_test]
+		reciprocity_test = self.stdev_reciprocity <= (2.*self.precision)
+		minimum_VF_test = self.VF_esperance < self.precision/10. # If the view factor estimation itself is very small, do not bother to spend too much time trying to fit the 3 sigmas in the estimation as long as the reciprocity is 
+		#print self.VF_esperance[~stdev_test]
+		self.progress = (N.logical_not(N.logical_and(reciprocity_test,N.logical_or(minimum_VF_test, stdev_test)))).any(axis=1)
 		#print self.progress
+
+		#print self.stdev_VF
+		#print self.precision*self.VF_esperance/3.
+
+
+		plt.figure()
+		for i in xrange(len(self.stdev_store_reciprocity)):
+			plt.scatter(N.ones((len(self.stdev_store_reciprocity[i]),len(self.stdev_store_reciprocity[i])))*(i+1), self.stdev_store_reciprocity[i], marker='+')
+		plt.savefig(open('/home/charles/Documents/Tracer/Reciprocity_convergence_plot.png', 'w'))
+		plt.figure()
+		for i in xrange(len(self.stdev_store_VF)):
+			plt.scatter(N.ones((len(self.stdev_store_VF[i]),len(self.stdev_store_VF[i])))*(i+1), self.stdev_store_VF[i], marker='+', zorder=1000)
+			#plt.scatter(N.ones((len(self.stdev_store_VF[i]),len(self.stdev_store_VF[i])))*(i+1), self.VF_esperance_store[i]/3.*self.precision, marker='*')
+			
+		plt.savefig(open('/home/charles/Documents/Tracer/VF_convergence_plot.png', 'w'))
+		plt.close("all")
 		#print (self.progress==True).any(axis=1)
 		#self.ray_counts = self.progress*self.num_rays
 		#print self.ray_counts
@@ -85,6 +107,7 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		self.coneDepth = coneDepth
 		self.el_FRUs = el_FRUs
 		self.el_CON = el_CON
+		procs = 8 # number of CPUs to be used
 
 		self.t0=time.clock()
 
@@ -101,6 +124,8 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 
 		areas = N.zeros(N.shape(self.VF)[0])
 		self.p = N.zeros(N.shape(self.VF)[0])
+
+		A = Assembly() # VF scene assembly
 
 		if type(el_FRUs)==int:
 			el_FRUs = N.asarray([el_FRUs])
@@ -176,31 +201,30 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 			CON = AssembledObject(surfs=[Surface(FiniteCone(r=frustaRadii[-1], h=-coneDepth), LambertianReceiver(absorptivity=1.))], transform=translate(z=max_depth+coneDepth))
 			rays_cone=False
 
-		self.A.add_object(AP)
+		A.add_object(AP)
 		for i in xrange(len(FRU)):
-			self.A.add_object(FRU[i])
-		self.A.add_object(CON)
-
-		self.AP = AP
-		self.CON = CON
-		self.FRU = FRU
+			A.add_object(FRU[i])
+		A.add_object(CON)
 
 		el_FRUs = self.el_FRUs
 		el_CON = self.el_CON
 
-		vf_tracer = TracerEngine(self.A)
-		itmax = 1 # stop iteration after this many ray bundles were generated (i.e. after the original rays intersected some surface this many times).
+		vf_tracer = TracerEngineMP(A)
+		vf_tracer.itmax = 1 # stop iteration after this many ray bundles were generated (i.e. after the original rays intersected some surface this many times).
 		vf_tracer.minener = 1e-15 # minimum energy threshold
-
-		while (self.progress==True).any():
+		stable_stats = 0
+		while (self.progress==True).any() or stable_stats<5:
 
 			tp = time.clock()
 
 			if self.ray_counts[0] != 0.:
 
-				SA = solar_disk_bundle(self.ray_counts[0], center=N.vstack([0,0,0]), direction=N.array([0,0,1]), radius=apertureRadius, ang_range=N.pi/2., flux=1./(N.pi*apertureRadius**2))
+				SA = []
+				for p in xrange(procs):
+					SA.append(solar_disk_bundle(self.ray_counts[0]/procs, center=N.vstack([0,0,0]), direction=N.array([0,0,1]), radius=apertureRadius, ang_range=N.pi/2., flux=1./(N.pi*self.apertureRadius**2.)/procs))
 
-				vf_tracer.ray_tracer(SA, itmax, vf_tracer.minener, tree = True)
+				vf_tracer.multi_ray_sim(SA, procs = procs)
+				self.A = vf_tracer._asm #due to multiprocessing inheritance break
 				#view = Renderer(vf_tracer)
 				#view.show_rays()
 				self.alloc_VF(0)
@@ -214,9 +238,12 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 					num_rays = self.ray_counts[elf+1]
 					rays_in = True
 
-					S = self.gen_source(num_rays, r0, r1, depth, center, rays_in)
+					S = []
+					for p in xrange(procs):
+						S.append(self.gen_source(num_rays/procs, r0, r1, depth, center, rays_in, procs=procs))
+					vf_tracer.multi_ray_sim(S, procs=procs)
 
-					vf_tracer.ray_tracer(S, itmax, vf_tracer.minener, tree = True)
+					self.A = vf_tracer._asm #due to multiprocessing inheritance break
 					#view = Renderer(vf_tracer)
 					#view.show_rays()
 					self.alloc_VF(elf+1)
@@ -236,9 +263,12 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 						else:
 							rays_in = True
 
-						S = self.gen_source(num_rays, r0, r1, depth, center, rays_in)
-
-						vf_tracer.ray_tracer(S, itmax, vf_tracer.minener, tree = True)
+						S = []
+						for p in xrange(procs):
+							S.append(self.gen_source(num_rays/procs, r0, r1, depth, center, rays_in, procs=procs))
+						vf_tracer.multi_ray_sim(S, procs=procs)
+						self.A = vf_tracer._asm #due to multiprocessing inheritance break
+						
 						#view = Renderer(vf_tracer)
 						#view.show_rays()
 
@@ -255,9 +285,12 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 					num_rays = self.ray_counts[N.sum(el_FRUs)+elc+1]
 					rays_in = rays_cone
 
-					S = self.gen_source(num_rays, r0, r1, depth, center, rays_in)
+					S = []
+					for p in xrange(procs):
+						S.append(self.gen_source(num_rays/procs, r0, r1, depth, center, rays_in, procs=procs))
+					vf_tracer.multi_ray_sim(S, procs=procs)
 
-					vf_tracer.ray_tracer(S, itmax, vf_tracer.minener, tree = True)
+					self.A = vf_tracer._asm #due to multiprocessing inheritance break
 					#view = Renderer(vf_tracer)
 					#view.show_rays()
 					self.alloc_VF(N.sum(el_FRUs)+elc+1)
@@ -266,6 +299,8 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 			self.p += self.ray_counts
 			self.test_precision()
 			print '		Progress:', N.sum(self.progress),'/', len(self.progress),'; Pass duration:', time.clock()-tp, 's'
+			if N.sum(self.progress) ==0:
+				stable_stats +=1
 			'''
 			if self.p[0]>5e6:
 				self.stdev_store = N.array(self.stdev_store)
@@ -284,16 +319,16 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		t1=time.clock()-self.t0
 		print '	VF calculation time:',t1,'s'
 
-	def gen_source(self, num_rays, r0, r1, depth, center, rays_in):
+	def gen_source(self, num_rays, r0, r1, depth, center, rays_in, procs):
 		'''
 		Generate a source for a specific element		
 		'''
 		if r0==r1:
-			S = vf_cylinder_bundle(num_rays=num_rays, rc=r0, lc=depth, center=center, direction=N.array([0,0,1]), rays_in=rays_in)
+			S = vf_cylinder_bundle(num_rays=num_rays, rc=r0, lc=depth, center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs)
 		elif depth==0.:
-			S = solar_disk_bundle(num_rays=num_rays, center=center, direction=N.array([0,0,N.sign(r1-r0)]), radius=r0, ang_range=N.pi/2., flux=1./(N.pi*N.abs(r0**2-r1**2)), radius_in=r1)
+			S = solar_disk_bundle(num_rays=num_rays, center=center, direction=N.array([0,0,N.sign(r1-r0)]), radius=r0, ang_range=N.pi/2., flux=1./(N.pi*N.abs(r0**2-r1**2)/procs), radius_in=r1)
 		else:
-			S = vf_frustum_bundle(num_rays=num_rays, r0=r0, r1=r1, depth=depth, center=center, direction=N.array([0,0,1]), rays_in=rays_in)
+			S = vf_frustum_bundle(num_rays=num_rays, r0=r0, r1=r1, depth=depth, center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs)
 
 		return S
 
@@ -309,6 +344,11 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		el_CON = self.el_CON
 
 		# Gather hits and absorbed radiative power
+
+		self.AP = self.A.get_objects()[0]
+		self.FRU = self.A.get_objects()[1:N.sum(len(el_FRUs))+1]
+		self.CON = self.A.get_objects()[N.sum(len(el_FRUs))+1:]
+
 		Aperture_abs, Aperture_hits = self.AP.get_surfaces()[0].get_optics_manager().get_all_hits()
 		Frustum_abs = []
 		Frustum_hits = []
@@ -316,7 +356,8 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 			Fru_abs, Fru_hits = self.FRU[i].get_surfaces()[0].get_optics_manager().get_all_hits()
 			Frustum_abs.append(N.asarray(Fru_abs))
 			Frustum_hits.append(N.asarray(Fru_hits))
-		Cone_abs, Cone_hits = self.CON.get_surfaces()[0].get_optics_manager().get_all_hits()
+		for i in xrange(len(el_CON)):
+			Cone_abs, Cone_hits = self.CON[i].get_surfaces()[0].get_optics_manager().get_all_hits()
 
 		# VF allocation to a nxn VF matrix. Convention is to go from the aperture to the back of the shape following the axi-symmetric profile line. First loop is for gemoetrical shapes and second one for the discretisation of each shape.
 		for j in xrange(len(el_FRUs)+2):
