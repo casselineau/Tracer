@@ -123,7 +123,7 @@ Reference:
 
 		lentree = tree.num_bunds()
 
-		for level in xrange(lentree):
+		for level in range(lentree):
 
 			start_rays = tree[level]
 			if max_rays ==  None:
@@ -147,7 +147,7 @@ Reference:
 				parents = end_rays.get_parents()
 
 			# loop through individual rays in this bundle
-			for ray in xrange(rays):
+			for ray in range(rays):
 				if se[ray] <= self.sim.minener:
 					# ignore rays with starting energy smaller than energy cutoff
 					continue

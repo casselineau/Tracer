@@ -24,8 +24,10 @@ class GeometryManager(object):
 		self._working_bundle = ray_bundle
 		
 		# This must be extended to return the correct result!
-		if type(self) is GeometryManager:
-			raise TypeError("Find intersections must be extended by a base class")
+		# This needs to be updated for use in Python3 - temporarily deactivated the check!
+
+		#if isinstance(self, GeometryManager):
+		#	raise TypeError("Find intersections must be extended by a base class")
 
 	def up(self):
 		"""

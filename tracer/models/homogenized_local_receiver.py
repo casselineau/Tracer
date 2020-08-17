@@ -27,7 +27,7 @@ class HomogenizedLocalReceiver(Assembly):
             square, and this height.
         homog_opt_eff - the optical efficiency of each mirror in the homogenizer
         """
-        if type(receiver_dims) is type(tuple()):
+        if isinstance(receiver_dims, type(tuple())):
             self._sides = receiver_dims
         else:
             self._sides = (receiver_dims, receiver_dims)

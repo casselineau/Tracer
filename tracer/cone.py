@@ -1,7 +1,7 @@
 # Implements a circular conical surface
 
 import numpy as N
-from quadric import QuadricGM
+from .quadric import QuadricGM
 
 
 class InfiniteCone(QuadricGM):

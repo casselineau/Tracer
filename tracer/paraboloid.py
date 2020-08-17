@@ -5,7 +5,7 @@
 # [2] http://en.wikipedia.org/wiki/Parabola
 
 import numpy as N
-from quadric import QuadricGM
+from .quadric import QuadricGM
 
 class Paraboloid(QuadricGM):
 	"""Implements the geometry of a circular paraboloid surface"""

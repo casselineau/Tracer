@@ -46,7 +46,7 @@ class HeliostatField(Assembly):
 		
 		self._heliostats = []
 
-		for p in xrange(positions.shape[0]):
+		for p in range(positions.shape[0]):
 			assert(not((focal_lengths[p] != None) and (quad_params[p] != None)))
 			if (focal_lengths[p] == None) and (quad_params[p] == None):
 				hstat = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option)	
@@ -105,7 +105,7 @@ class HeliostatField(Assembly):
 		if tracking == 'azimuth_elevation':
 			hstat_az = N.arctan2(hstat[:,1], hstat[:,0])
 			hstat_el = N.arccos(hstat[:,2])
-			for hidx in xrange(self._pos.shape[0]):
+			for hidx in range(self._pos.shape[0]):
 				if tracking_error != None:
 					ang_err_1 = N.random.normal(scale=tracking_error)
 					ang_err_2 = N.random.normal(scale=tracking_error)
@@ -125,7 +125,7 @@ class HeliostatField(Assembly):
 		elif tracking == 'tilt_roll':
 			hstat_tilt = N.arctan2(hstat[:,1],hstat[:,2])
 			hstat_roll = N.arcsin(hstat[:,0])
-			for hidx in xrange(self._pos.shape[0]):
+			for hidx in range(self._pos.shape[0]):
 				if tracking_error != None:
 					ang_err_1 = N.random.normal(scale=tracking_error)
 					ang_err_2 = N.random.normal(scale=tracking_error)

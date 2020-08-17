@@ -100,7 +100,7 @@ class RealReflective(object):
 
 			# Build the normal_error vectors in the local frame.
 			real_normals = N.zeros(N.shape(ideal_normals))
-			for i in xrange(N.shape(real_normals)[1]):
+			for i in range(N.shape(real_normals)[1]):
 				real_normals[:,i] = N.dot(rots_norms[i], normal_errors[:,i])
 
 			#normal_errors = N.dot(geometry._working_frame[:3,:3], N.vstack((normal_errors_x, normal_errors_y, normal_errors_z)))

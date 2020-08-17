@@ -41,7 +41,7 @@ class TracerEngineMP(TracerEngine):
 		timepost = time.clock()
 
 		# New general tree:
-		for eng in xrange(len(resm)):
+		for eng in range(len(resm)):
 
 			# Get and regroup results in one tree and assembly only:
 			if eng == 0 : # Initialise with the first engine
@@ -51,7 +51,7 @@ class TracerEngineMP(TracerEngine):
 			else:
 				if self.tree_switch == True:
 					eng_bunds = resm[eng].tree._bunds
-					for b in xrange(len(eng_bunds)):
+					for b in range(len(eng_bunds)):
 						if b > 0: # if it is not the starting bundle (emanating from the source) add to the parents indices according to the size of the general tree bundle size.
 							eng_bunds[b]._parents = eng_bunds[b]._parents+next_parents_adjust
 						if b == len(self.tree._bunds): # If the bundle number is over the existing limit in the general tree, append it to increase the general tree size.
@@ -63,34 +63,34 @@ class TracerEngineMP(TracerEngine):
 				# Next loop is to get the optics callable objects and copy regroup their values without asumptions about what they are.
 				subas_engine = resm[eng]._asm.get_assemblies()
 				if len(subas_engine):
-					for a in xrange(len(subas_engine)):
+					for a in range(len(subas_engine)):
 						objs_subas = subas_engine[a].get_local_objects()
-						for o in xrange(len(objs_subas)):
+						for o in range(len(objs_subas)):
 							surfs_object = objs_subas[o].get_surfaces()
-							for s in xrange(len(surfs_object)):
-								for k in surfs_object[s]._opt.__dict__.keys():
+							for s in range(len(surfs_object)):
+								for k in list(surfs_object[s]._opt.__dict__.keys()):
 									if k != '_opt':
 										if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
 											[self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k].append(q) for q in surfs_object[s]._opt.__dict__[k]]
 
 				objs_engine = resm[eng]._asm.get_local_objects()
 				if len(objs_engine):
-					for o in xrange(len(objs_engine)):
+					for o in range(len(objs_engine)):
 						surfs_object = objs_engine[o].get_surfaces()
-						for s in xrange(len(surfs_object)):
-							for k in surfs_object[s]._opt.__dict__.keys():
+						for s in range(len(surfs_object)):
+							for k in list(surfs_object[s]._opt.__dict__.keys()):
 								if k != '_opt':
 									[self._asm._objects[o].surfaces[s]._opt.__dict__[k].append(q) for q in surfs_object[s]._opt.__dict__[k]]
 
 		# We need the next part to reshape everything to the right array format.
 		asm_subas = self._asm.get_assemblies()
 		if len(asm_subas):
-			for a in xrange(len(asm_subas)):
+			for a in range(len(asm_subas)):
 				objs_subas = asm_subas[a].get_local_objects()
-				for o in xrange(len(objs_subas)):
+				for o in range(len(objs_subas)):
 					surfs_object = objs_subas[o].get_surfaces()
-					for s in xrange(len(surfs_object)):
-						for k in surfs_object[s]._opt.__dict__.keys():
+					for s in range(len(surfs_object)):
+						for k in list(surfs_object[s]._opt.__dict__.keys()):
 							if k != '_opt':
 								if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
 									if len(surfs_object[s]._opt.__dict__[k])>0:
@@ -103,10 +103,10 @@ class TracerEngineMP(TracerEngine):
 	
 		asm_objs = self._asm.get_local_objects()
 		if len(asm_objs):
-			for o in xrange(len(asm_objs)):
+			for o in range(len(asm_objs)):
 				surfs_object = asm_objs[o].get_surfaces()
-				for s in xrange(len(surfs_object)):
-					for k in surfs_object[s]._opt.__dict__.keys():
+				for s in range(len(surfs_object)):
+					for k in list(surfs_object[s]._opt.__dict__.keys()):
 						if k != '_opt':
 							if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
 								if len(surfs_object[s]._opt.__dict__[k])>0:

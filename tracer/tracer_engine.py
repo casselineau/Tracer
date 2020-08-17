@@ -1,8 +1,8 @@
 # Implements a tracer engine class
 
 import numpy as N
-from ray_bundle import RayBundle, concatenate_rays
-from trace_tree import RayTree
+from .ray_bundle import RayBundle, concatenate_rays
+from .trace_tree import RayTree
 
 class TracerEngine():
     """
@@ -47,7 +47,7 @@ class TracerEngine():
         owned_rays = N.empty(ret_shape, dtype=N.bool)
         
         # Bounce rays off each object
-        for surf_num in xrange(len(surfaces)):
+        for surf_num in range(len(surfaces)):
             # Elements of owned_rays[surfnum] set to 1 if (rays dont own any surface or rays own the actual surface) and the surface is relevant to these rays.
             owned_rays[surf_num] = ((ray_ownership == -1) | (ray_ownership == surf_ownership[surf_num])) & surf_relevancy[surf_num]
             # If no ray is owned, skip the rest and build the stack
@@ -123,7 +123,7 @@ class TracerEngine():
         ray_ownership = -1*N.ones(bund.get_num_rays())
         surfs_relevancy = N.ones((num_surfs, bund.get_num_rays()), dtype=N.bool)
 
-        for i in xrange(reps):
+        for i in range(reps):
 
             front_surf, owned_rays = self.intersect_ray(bund, surfaces, objects, \
                 surf_ownership, ray_ownership, surfs_relevancy)
@@ -134,7 +134,7 @@ class TracerEngine():
             new_surfs_relevancy = []
             weak_ray_pos = []
 
-            for surf_idx in xrange(num_surfs):
+            for surf_idx in range(num_surfs):
                 inters = front_surf[surf_idx, owned_rays[surf_idx]]
                 if not any(inters): 
                     surfaces[surf_idx].done()

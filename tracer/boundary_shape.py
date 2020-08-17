@@ -1,7 +1,7 @@
 # Implements a sphere as a bounding shape to a surface to define the exact shape of the surface
 
 import numpy as N
-from has_frame import HasFrame
+from .has_frame import HasFrame
 
 class BoundaryShape(HasFrame):
     """
