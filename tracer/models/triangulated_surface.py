@@ -46,7 +46,7 @@ class TriangulatedSurface(AssembledObject):
         
         face_list = [Surface(TriangularFace(edges_local[face_ix].T), optics,
             location=pos[face_ix], rotation=rots[face_ix]) \
-            for face_ix in xrange(xs.shape[0])]
+            for face_ix in range(xs.shape[0])]
         
         AssembledObject.__init__(self, face_list, None, transform)
 

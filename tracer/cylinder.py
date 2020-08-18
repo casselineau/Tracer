@@ -88,7 +88,7 @@ class FiniteCylinder(InfiniteCylinder):
 		coords = N.concatenate((coords, N.ones((2,1,coords.shape[-1]))), axis=1)
 
 		local = []
-		for i in xrange(coords.shape[0]):
+		for i in range(coords.shape[0]):
 			local.append(N.dot(proj[:-1,:], coords[i]))
 		#height= N.sum(proj[None,2,:,None] * N.concatenate((coords, N.ones((2,1,coords.shape[-1]))), axis=1), axis=1)
 		local = N.array(local)

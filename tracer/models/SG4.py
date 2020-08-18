@@ -46,7 +46,7 @@ class SG4(Assembly):
 		hits = []
 		abs = []
 
-		for i in xrange(len(surfs)):
+		for i in range(len(surfs)):
 			abs.append(surfs[i].get_optics_manager().get_all_hits()[0])
 			hits.append(surfs[i].get_optics_manager().get_all_hits()[1])
 

@@ -60,9 +60,9 @@ class RayBundle:
         base_vals.update(kwds)
         
         self._check_attr = [] # Attrs to look for when concatenating bundles
-        for n, v in base_vals.iteritems():
+        for n, v in base_vals.items():
             self._create_property(n, v)
-    
+
     def _create_property(self, propname, init_val):
         """
         Add a property of a ray, expected to be an array whose shape[-1] ==
@@ -94,9 +94,9 @@ class RayBundle:
                 self.__dict__[attr][...,selector] = new_val
         
         self.__dict__['get_' + propname] = \
-            types.MethodType(getter, self, self.__class__)
+            types.MethodType(getter, self)
         self.__dict__['set_' + propname] = \
-            types.MethodType(setter, self, self.__class__)
+            types.MethodType(setter, self)
         
         if init_val is not None:
             self.__dict__['set_' + propname](init_val)
@@ -138,7 +138,7 @@ class RayBundle:
             'ref_index': ref_index})
         base_vals.update(kwds)
         
-        for p, v in base_vals.iteritems():
+        for p, v in base_vals.items():
             if base_vals[p] is None and hasattr(self, '_' + p):
                 base_vals[p] = self.__dict__['get_' + p](selector)
         

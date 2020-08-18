@@ -57,7 +57,7 @@ class TwoNparamcav(Assembly):
 		self.frustaDepths = frustaDepths # frusta depths
 		self.coneDepth = coneDepth # cone depth
 
-		if (type(absReceiver)==float) or (type(absReceiver)==int):
+		if (isinstance(absReceiver, float)) or (isinstance(absReceiver, int)):
 			self.absReceiver = N.hstack((1.,N.ones(len(frustaRadii)+1)*absReceiver))
 		else:
 			self.absReceiver = absReceiver
@@ -129,7 +129,7 @@ class TwoNparamcav(Assembly):
 				frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.apertureRadius, z2=self.frustaDepths[0], r2=self.frustaRadii[0]), LambertianReceiver(absorptivity=self.absReceiver[1]))], transform=None)
 			FRU.append(frustum)
 			# next frusta:
-			for i in xrange(1,len(frustaRadii)):
+			for i in range(1,len(frustaRadii)):
 				if self.frustaRadii[i-1]==self.frustaRadii[i]: # Cylinder
 					frustum = AssembledObject(surfs=[Surface(FiniteCylinder(diameter=self.frustaRadii[i-1]*2, height=self.frustaDepths[i]), LambertianReceiver(self.absReceiver[1+i]))], transform=translate(z=N.sum(self.frustaDepths[:i])+self.frustaDepths[i]/2.))
 				elif self.frustaDepths[i] < 0.:
@@ -145,7 +145,7 @@ class TwoNparamcav(Assembly):
 
 			self.CON = CON
 			self.FRU = FRU
-			for i in xrange(len(FRU)):
+			for i in range(len(FRU)):
 				self.Active_zone.add_object(FRU[i])
 		self.Active_zone.add_object(CON)	
 		self.add_assembly(Envelope, transform=trr)
@@ -165,7 +165,7 @@ class TwoNparamcav(Assembly):
 		- self.areas: array containing the areas of each of the bins in (m2).
 		'''
 		# Emissivity array shaping. Aperture value has to be 1 for an open receiver. Takes place before the VF calculation to avoid spending useless time on this if the array is not shaped properly.
-		if (type(self.emsReceiver)!=N.ndarray) and (type(self.emsReceiver)!=list):
+		if (not isinstance(self.emsReceiver, N.ndarray)) and (not isinstance(self.emsReceiver, list)):
 			self.emsReceiver = N.hstack(N.append(1.,N.ones(N.sum(N.array(bins_frusta))+bins_cone)*self.emsReceiver))
 		#assert(len(self.emsReceiver)==N.sum(N.array(bins_frusta))+bins_cone+1)
 
@@ -186,7 +186,7 @@ class TwoNparamcav(Assembly):
 		index = 0 # to track which element of the profile we are dealing with in absolute terms.
 
 		# Bin Frusta:
-		for i in xrange(len(self.frustaDepths)):
+		for i in range(len(self.frustaDepths)):
 			# Adjust the hits detector position to take into account the placement of the receiver in comparision with the focal plane.
 			#z1 = N.sum(self.frustaDepths[:i+1])-self.frustaDepths[i]+self.aperture_position
 			#z2 = N.sum(self.frustaDepths[:i+1])+self.aperture_position
@@ -207,7 +207,7 @@ class TwoNparamcav(Assembly):
 
 			rads = N.around(N.sqrt(hits[0]**2.+hits[1]**2.), decimals=9)
 	
-			for j in xrange(self.bins_frusta[i]):
+			for j in range(self.bins_frusta[i]):
 				index+=1
 				z1bin = j*self.frustaDepths[i]/self.bins_frusta[i]
 				z2bin = (j+1)*self.frustaDepths[i]/self.bins_frusta[i]
@@ -231,7 +231,7 @@ class TwoNparamcav(Assembly):
 		hits = N.around(hits, decimals=9)
 		hits = int_walls[i].global_to_local(hits)
 
-		for i in xrange(self.bins_cone):
+		for i in range(self.bins_cone):
 			index+=1
 			r1 = self.frustaRadii[-1]*(1.-float(i)/self.bins_cone)
 			r2 = self.frustaRadii[-1]*(1.-(i+1.)/self.bins_cone)
@@ -331,7 +331,7 @@ class TwoNparamcav(Assembly):
 			uconv = N.zeros(len(tube_diameters_in)-1)
 
 			# Go through the flow-path, actualise the pressures and evaluate the heat transfer coefficients.
-			for i in xrange(len(tube_positions)-1):
+			for i in range(len(tube_positions)-1):
 
 				# Evaluate the steam properties:
 				steam_state = steam_ph(self.p[i], hs_p[i])
@@ -447,7 +447,7 @@ class TwoNparamcav(Assembly):
 
 			#FIXME: need a more reliable convergence insurance
 			if self.m < 0.01:
-				print 'bad_geom'
+				print('bad_geom')
 				return 'bad_geom'
 
 			# Evaluate convergence:
@@ -456,8 +456,8 @@ class TwoNparamcav(Assembly):
 
 			iterh += 1
 			if iterh>100:
-				print conv_h
-				print self.h
+				print(conv_h)
+				print(self.h)
 				stop
 
 		# Get the tube elements properties:
@@ -466,7 +466,7 @@ class TwoNparamcav(Assembly):
 		# Get temperatures from enthalpies via Freesteam
 		T_guess_fluid = N.zeros(len(self.h))
 		T_guess_fluid[0] = T_in
-		for i in xrange(1,len(self.h)):
+		for i in range(1,len(self.h)):
 			T_guess_fluid[i] = steam_ph(self.p[i],self.h[i]).T
 
 		# Central differences scheme:
@@ -537,7 +537,7 @@ class TwoNparamcav(Assembly):
 		The temperature of the elements, an array of zeros if the candidates are net energy destructors.
 		'''
 		# Iterate to find wall temperatures and respect the energy balance:
-		if type(self.emsReceiver)==float:
+		if isinstance(self.emsReceiver, float):
 			self.emsReceiver = N.hstack((1.,N.ones(len(self.areas)-1)*self.emsReceiver))
 
 		self.T = N.linspace(Trec_in, Trec_out, len(self.areas))#N.ones(len(self.areas))*Trec_out
@@ -577,11 +577,11 @@ class TwoNparamcav(Assembly):
 			if iterQ>30:
 				convergence = N.abs((self.Q-emissions))
 				threshold = 100.
-				print iterQ
+				print(iterQ)
 				#print convergence
 
 			emissions = (self.Q+emissions)/2.
 			iterQ += 1
 
-		print 'Final T guess:', self.T
+		print('Final T guess:', self.T)
 		return result_T_guess

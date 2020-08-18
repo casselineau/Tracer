@@ -48,7 +48,7 @@ class RayTree(object):
         parents = np.empty(level)
         parents[0] = ray_index
         
-        for pix in xrange(1, level):
+        for pix in range(1, level):
             parents[pix] = \
                 self._bunds[level - pix + 1].get_parents()[parents[pix - 1]]
         

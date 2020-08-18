@@ -5,6 +5,7 @@ import numpy as N
 
 from .spatial_geometry import general_axis_rotation
 from .has_frame import HasFrame
+from functools import reduce
 
 class Assembly(HasFrame):
     """
@@ -34,18 +35,18 @@ class Assembly(HasFrame):
         HasFrame.__init__(self, location, rotation)
 
     def global_to_local(self, points):
-		"""
-		Transform a set of points in the global coordinates back into the frame
-		used during tracing.
-		
-		Arguments:
-		points - a 3 x n array for n 3D points
-		
-		returns:
-		local - a 3 x n array with the respective points in local coordinates.
-		"""
-		proj = N.round(N.linalg.inv(self._temp_frame), decimals=9)
-		return N.dot(proj, N.vstack((points, N.ones(points.shape[1]))))
+                """
+                Transform a set of points in the global coordinates back into the frame
+                used during tracing.
+
+                Arguments:
+                points - a 3 x n array for n 3D points
+
+                returns:
+                local - a 3 x n array with the respective points in local coordinates.
+                """
+                proj = N.round(N.linalg.inv(self._temp_frame), decimals=9)
+                return N.dot(proj, N.vstack((points, N.ones(points.shape[1]))))
 
     def get_local_objects(self):
         """

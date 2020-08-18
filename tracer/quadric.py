@@ -5,7 +5,7 @@
 # [2] http://en.wikipedia.org/wiki/Quadric
 
 import numpy as N
-from geometry_manager import GeometryManager
+from .geometry_manager import GeometryManager
 
 class QuadricGM(GeometryManager):
     """

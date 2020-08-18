@@ -300,7 +300,7 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 	# Step 3: polar angle determination: 
 	thetas = N.zeros(num_rays)
 	R_thetas = N.random.uniform(size=num_rays)
-	for i in xrange(len(CDF_DNI)-1):
+	for i in range(len(CDF_DNI)-1):
 		slice_loc = N.logical_and((R_thetas >= CDF_DNI[i]), (R_thetas < CDF_DNI[i+1]))
 		A = phi_dni_int[i]*N.cos(theta_int[i])*N.sin(theta_int[i])
 		B = phi_dni_int[i+1]*N.cos(theta_int[i+1])*N.sin(theta_int[i+1])
@@ -588,7 +588,7 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
 	theta_rot = -N.pi/2.+theta_s
 	yrot = roty(theta_rot)[:3,:3]
 	local_unit = N.zeros((N.shape(dir_flat)))
-	for t in xrange(N.shape(dir_flat)[1]):
+	for t in range(N.shape(dir_flat)[1]):
 		rotd = N.dot(yrot, dir_flat[:,t])
 		zrot = rotz(phi_s[t])[:3,:3]
 		local_unit[:,t] = N.dot(zrot, rotd)

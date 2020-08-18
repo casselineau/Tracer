@@ -6,7 +6,7 @@
 
 from numpy import linalg as LA
 import numpy as N
-from geometry_manager import GeometryManager
+from .geometry_manager import GeometryManager
 
 class FlatGeometryManager(GeometryManager):
 	"""
@@ -28,7 +28,8 @@ class FlatGeometryManager(GeometryManager):
 		A 1D array with the parametric position of intersection along each of
 			the rays. Rays that missed the surface return +infinity.
 		"""
-		GeometryManager.find_intersections(self, frame, ray_bundle)
+		#GeometryManager.find_intersections(self, frame, ray_bundle)
+		super().find_intersections(frame, ray_bundle)
 		
 		d = ray_bundle.get_directions()
 		v = ray_bundle.get_vertices() - frame[:3,3][:,None]
@@ -352,7 +353,7 @@ class RoundPlateGM(FiniteFlatGM):
 			raise ValueError("Radius must be positive")
 		if Ri != None:
 			if Ri >= Re:
-				print 'Ri: ',Ri, 'Re: ', Re
+				print('Ri: ',Ri, 'Re: ', Re)
 				raise ValueError("Inner Radius must be lower than the outer one")
 			if Ri <= 0.:
 				raise ValueError("Radius must be positive")
@@ -478,7 +479,7 @@ class StraightCutRoundPlateGM(RoundPlateGM):
 			x = N.zeros((resolution+1,resolution+1))
 			y = N.zeros_like(x)
 			z = N.zeros_like(x)
-			for i in xrange(x.shape[0]):
+			for i in range(x.shape[0]):
 				rs = N.linspace(self.x_cut/N.cos(angs[i]), self._Re, resolution+1)
 				x[i] = rs*N.cos(angs[i])
 				y[i] = rs*N.sin(angs[i])
@@ -540,7 +541,7 @@ class StraightCutRoundPlateGM(RoundPlateGM):
 			areas = N.abs(dxs*dys)
 			fluxcut2 = N.hstack(enerscut2/areas.T)
 
-			for i in xrange(len(flux)/3):
+			for i in range(len(flux)/3):
 				idx = resolution/3
 				flux[resolution*i:resolution*i+idx] = fluxcut1[idx*i:idx*(i+1)]
 				flux[resolution*i+idx:resolution*i+2*idx] = fluxdisk[idx*i:idx*(i+1)]
@@ -574,7 +575,7 @@ class StraightCutRoundPlateGM(RoundPlateGM):
 			areas[:,-1] += (angs[1:]-angs[:-1])/2.*self._Re**2-b[:,-1]/2.*self._Re*N.cos(N.arcsin(b[:,-1]/(2.*self._Re)))
 
 			# Binning:
-			for i in xrange(int(resolution)):
+			for i in range(int(resolution)):
 				# Separations lines equation coefficients:
 				a_seps = N.tile((y[i+1]-y[i])/(x[i+1]-x[i]), (local_coords.shape[1],1))
 				b_seps = y[i]-a_seps*x[i]

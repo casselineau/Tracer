@@ -1,8 +1,8 @@
 # Defines an object class, where an object is defined as an assembly of surfaces.
 
 import numpy as N
-from spatial_geometry import general_axis_rotation
-from assembly import Assembly
+from .spatial_geometry import general_axis_rotation
+from .assembly import Assembly
 
 class AssembledObject(Assembly):
     """ Defines an assembly of surfaces as an object. The object has its own set of 
