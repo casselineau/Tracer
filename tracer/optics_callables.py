@@ -32,27 +32,6 @@ class Reflective(object):
 	def reset(self):
 		pass
 
-def Reflective_IAM(object):
-	'''
-	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
-	'''
-	def __init__(self, absorptivity, a_r):
-		self._abs = absorptivity
-		self.a_r = a_r
-	
-	def __call__(self, geometry, rays, selector):
-
-		theta_AOI = N.arccos(N.dot(rays.get_directions()[:,selector], -geometry.get_normals()))
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(rays.get_directions()[:,selector], geometry.get_normals()),
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-N.cos(theta_AOI)/a_r))/(1.-N.exp(-1./a_r))),
-			parents=selector)
-		return outg
-
-	def reset(self):
-		pass
-
 perfect_mirror = Reflective(0)
 
 class RealReflective(object):
@@ -435,14 +414,4 @@ class SemiLambertianDetector(DirectionAccountant):
 	"""A wrapper around DirectionAccountant with LambertianReflector optics"""
 	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
 		DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range)
-
-class IAMReceiver(AbsorptionAccountant):
-	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
-	def __init__(self, absorptivity=1., ang_range=N.pi/2.):
-		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
-
-class IAMdetector(AbsorptionAccountant):
-	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
-	def __init__(self, absorptivity=1., ang_range=N.pi/2.):
-		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
 
