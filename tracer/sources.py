@@ -209,7 +209,7 @@ def solar_rect_bundle(num_rays, center, direction, x, y, ang_range, flux=None, p
 
 #def bivariate_rect_bundle(num_rays, center, direction, x, y, ang_range_vert, ang_range_hor, flux=None):
 
-def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1):
+def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1, wavelength=None):
 	a = pillbox_sunshape_directions(num_rays, ang_range)
 	# Rotate to a frame in which <direction> is Z:
 	perp_rot = rotation_to_z(rays_direction)
@@ -225,8 +225,12 @@ def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction
 	vertices_local = N.vstack((ys, xs, N.zeros(num_rays)))
 	perp_rot = rotation_to_z(source_direction)
 	vertices_global = N.dot(perp_rot, vertices_local)
-
-	rayb = RayBundle(vertices=vertices_global + center, directions=directions)
+	if wavelength is not None:
+		wavelengths = N.repeat(wavelength, num_rays)
+		rayb = RayBundle(vertices=vertices_global + center, directions=directions, wavelengths=wavelengths)
+	else:
+		rayb = RayBundle(vertices=vertices_global + center, directions=directions)
+	
 	if flux != None:
 		cosangle = 2.*N.arcsin(0.5*N.sqrt(N.sum((rays_direction-source_direction)**2)))
 		rayb.set_energy(x*y/num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
