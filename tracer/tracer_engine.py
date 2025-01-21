@@ -256,7 +256,7 @@ class TracerEngine():
 					# Add new surface-relevancy information, saying which surfaces
 					# of the full list of surfaces must be checked next. This is
 					# somewhat memory-intensize and requires optimization.
-					surf_relev = N.ones((num_surfs, new_outg.get_num_rays()), dtype=N.bool)
+					surf_relev = N.ones((num_surfs, new_outg.get_num_rays()), dtype=bool)
 					surf_relev[surf_ownership == obj_idx] = \
 						objects[obj_idx].surfaces_for_next_iteration(new_outg, surf_rel_idx)
 					new_surfs_relevancy.append(surf_relev)					
