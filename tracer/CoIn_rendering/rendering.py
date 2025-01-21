@@ -1,4 +1,4 @@
-#SOGUI_BINDING="SoQt"
+#SOGUI_BINDING="Quarter"
 
 
 from pivy import coin
@@ -78,9 +78,9 @@ Reference:
 	def show(self):
 		win = SoGui.init(sys.argv[0])
 		viewer = SoGuiExaminerViewer(win)
-		bgcol = coin.sbColor(.9,.9,.8) # if rgb: from 0 to 255, if rgba, values form 0 to 1
+		bgcol = coin.SbColor(.9*255,.9*255,.8*255)
 		viewer.setBackgroundColor(bgcol)
-		viewer.quarterwidget.sorendermanager.getGLRenderAction().setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
+		viewer.getGLRenderAction().setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
 		viewer.setSceneGraph(self.r)
 		viewer.setTitle("Examiner Viewer")
 		viewer.show()
@@ -194,12 +194,12 @@ Reference:
 					c2 = sv[:,ray] + sd[:,ray]*l
 					co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
-			color=(1-float(level)/lentree,0,0)
+			color=((1.-float(level)/lentree)*255,0,0)
 
 			no1 = coin.SoSeparator()
 
 			ma1 = coin.SoMaterial()
-			ma1.diffuseColor = color
+			ma1.diffuseColor = coin.SbColor(color)
 			no1.addChild(ma1)
 
 			ds = coin.SoDrawStyle()
