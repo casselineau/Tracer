@@ -78,7 +78,7 @@ Reference:
 	def show(self):
 		win = SoGui.init(sys.argv[0])
 		viewer = SoGuiExaminerViewer(win)
-		bgcol = .9,.9,.8,0 # if rgb: from 0 to 255, if rgba, values form 0 to 1
+		bgcol = coin.sbColor(.9,.9,.8) # if rgb: from 0 to 255, if rgba, values form 0 to 1
 		viewer.setBackgroundColor(bgcol)
 		viewer.quarterwidget.sorendermanager.getGLRenderAction().setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
 		viewer.setSceneGraph(self.r)
