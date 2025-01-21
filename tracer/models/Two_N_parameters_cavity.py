@@ -261,7 +261,7 @@ class TwoNparamcav(Assembly):
 		- strings 'good_geom' or 'bad_geom' depending on the mass flow guess to meet the input/output arguments and amount of actually going in the receiver. This is a quick hack to prevent issues with receivers forcing in the required inpu/output by lowering the mass flow too much/putting it negative, thus impacting the enthalpy guess... and basically screwing-up the convergence process for non-performing geometries.
 		'''
 		# Get active surfaces net radiative power
-		active = N.ones(len(self.areas), dtype = N.bool)
+		active = N.ones(len(self.areas), dtype = bool)
 		active[0] = 0. # aperture
 
 		if passive != None:

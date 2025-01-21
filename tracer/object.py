@@ -93,7 +93,7 @@ class AssembledObject(Assembly):
 		a boolean array of length rays.get_num_rays() with False if not owned,
 			True if owned.
 		"""
-		return N.zeros(rays.get_num_rays(), dtype=N.bool)
+		return N.zeros(rays.get_num_rays(), dtype=bool)
 	
 	def surfaces_for_next_iteration(self, rays, surface_id):
 		"""
@@ -110,7 +110,7 @@ class AssembledObject(Assembly):
 			stating whether ray i=1..r should be intersected with surface j=1..s
 			in the next iteration.
 		"""
-		return N.ones((len(self.surfaces), rays.get_num_rays()), dtype=N.bool)
+		return N.ones((len(self.surfaces), rays.get_num_rays()), dtype=bool)
 
 	def get_scene_graph(self,resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
 		n = self.get_scene_graph_transform()

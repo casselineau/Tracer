@@ -126,7 +126,7 @@ class FONaR_RTVF(RTVF):
 		self.t0 = time.clock()
 
 		self.VF = N.zeros((N.shape(binning_scheme)[0], N.shape(binning_scheme)[0]))
-		self.progress = N.ones(N.shape(self.VF), dtype=N.bool)
+		self.progress = N.ones(N.shape(self.VF), dtype=bool)
 
 		# Standard deviation computation variables.
 		self.VF_esperance = N.zeros(N.shape(self.VF))
@@ -382,7 +382,7 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		self.t0=time.clock()
 
 		self.VF = N.zeros((1+N.sum(el_FRUs)+el_CON, 1+N.sum(el_FRUs)+el_CON))
-		self.progress = N.ones(N.shape(self.VF), dtype=N.bool)
+		self.progress = N.ones(N.shape(self.VF), dtype=bool)
 
 		# Standard deviation computation variables.
 		self.VF_esperance = N.zeros(N.shape(self.VF))

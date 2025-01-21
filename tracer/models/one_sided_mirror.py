@@ -28,7 +28,7 @@ def surfaces_for_next_iteration(self, rays, surface_id):
 		stating whether ray i=1..r should be intersected with surface j=1..s
 		in the next iteration.
 	"""
-	return N.zeros((len(self.surfaces), rays.get_num_rays()), dtype=N.bool)
+	return N.zeros((len(self.surfaces), rays.get_num_rays()), dtype=bool)
 
 def rect_one_sided_mirror(width, height, absorptivity=0, sigma=0., bi_var=True, option=None, location=None, rotation=None):
 	"""

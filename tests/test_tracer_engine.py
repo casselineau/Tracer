@@ -45,7 +45,7 @@ class TestTraceProtocol1(unittest.TestCase):
         surfs_per_obj = [len(obj.get_surfaces()) for obj in objects]
         surf_ownership = N.repeat(N.arange(len(objects)), surfs_per_obj)
         ray_ownership = -1*N.ones(self._bund.get_num_rays())
-        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=N.bool)
+        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=bool)
         
         params = self.engine.intersect_ray(self._bund, surfaces, objects, \
             surf_ownership, ray_ownership, surfs_relevancy)[0]
@@ -83,7 +83,7 @@ class TestTraceProtocol2(unittest.TestCase):
         surfs_per_obj = [len(obj.get_surfaces()) for obj in objects]
         surf_ownership = N.repeat(N.arange(len(objects)), surfs_per_obj)
         ray_ownership = -1*N.ones(self._bund.get_num_rays())
-        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=N.bool)
+        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=bool)
         
         params = engine.intersect_ray(self._bund, surfaces, objects, \
             surf_ownership, ray_ownership, surfs_relevancy)[0]
@@ -120,7 +120,7 @@ class TestTraceProtocol3(unittest.TestCase):
         surfs_per_obj = [len(obj.get_surfaces()) for obj in objects]
         surf_ownership = N.repeat(N.arange(len(objects)), surfs_per_obj)
         ray_ownership = -1*N.ones(self._bund.get_num_rays())
-        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=N.bool)
+        surfs_relevancy = N.ones((len(surfaces), self._bund.get_num_rays()), dtype=bool)
         
         params = self.engine.intersect_ray(self._bund, surfaces, objects, \
             surf_ownership, ray_ownership, surfs_relevancy)[0]
