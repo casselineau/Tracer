@@ -317,7 +317,6 @@ class LambertianSpecular_directional_axisymmetric_piecewise(OpticsCallable):
 		directs = N.zeros(directions.shape)
 
 		thetas_in = N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
-
 		ang_abss = N.interp(thetas_in, self.thetas, self.abs_th)
 
 		specular = N.random.rand(len(selector))<self.specularity
@@ -884,7 +883,7 @@ class FresnelConductorHomogenous(OpticsCallable):
 		"""
 		Arguments:
 		n1 - scalar representing the homogenous refractive index of a perfect dielectric (incident medium always as we assume skin depth absorption in the conductor).
-		material - a material instance from the opticsl_constants module.
+		material - a material instance from the optical_constants module.
 		"""
 		self._n1 = n1
 		self._material = material

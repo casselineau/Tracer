@@ -27,7 +27,6 @@ def fresnel(ray_dirs, normals, n1, n2):
 	# Factor out common terms in Fresnel's equations:
 	foo = N.cos(theta_in) 
 	bar = N.sqrt(1 - (n1/n2 * N.sin(theta_in))**2)
-	
 	Rs = ((n1*foo - n2*bar)/(n1*foo + n2*bar))**2 
 	Rp = ((n1*bar - n2*foo)/(n1*bar + n2*foo))**2
 
@@ -206,6 +205,15 @@ def attenuations(path_lengths, k, lambda_0, energy):
 	T = N.exp(-4.*N.pi*k/lambda_0*path_lengths)
 	energy = T*energy
 	return energy
+
+def R_from_n_k(n1, n2, res=100):
+	thetas_in = N.vstack(N.linspace(0., N.pi/2., res))
+	foo = N.cos(thetas_in)
+	bar = N.sqrt(1. - (n1/n2 * N.sin(thetas_in))**2)
+	Rs = ((n1*foo - n2*bar)/(n1*foo + n2*bar))**2
+	Rp = ((n1*bar - n2*foo)/(n1*bar + n2*foo))**2
+	R = (Rs + Rp) / 2.
+	return N.ravel(thetas_in), R
 
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
