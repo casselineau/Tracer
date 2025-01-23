@@ -2,7 +2,7 @@ import numpy as N
 from ray_trace_utils.electromagnetics import Drude_Lorentz_model, dielectric_to_refractive
 from scipy.interpolate import interp1d
 
-Sopra_data_loc = r'C:\Users\assel\Documents\GitHub\Tracer\ray_trace_utils\Sopra_Data'
+Sopra_data_loc = '..\Sopra_Data'
 
 class optical_material(object):
 
