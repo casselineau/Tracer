@@ -26,7 +26,7 @@ def Planck(wl, T):
 	h = 6.626070040e-34 # Planck constant
 	c = 299792458. # Speed of light in vacuum
 	k = 1.38064852e-23 # Boltzmann constant
-	return (2.*N.pi*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
+	return (2.*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
 
 def single_ray_source(position, direction, flux=None):
 	'''

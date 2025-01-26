@@ -34,18 +34,19 @@ class PW_linear_distribution(object):
 		x_samples = N.zeros(ns)
 		R = N.random.uniform(size=ns)
 		a = self.a/(2.*self.tot_integ)
-		b = self.PDF_def
+		b = self.b/self.tot_integ
+		c = self.CDF_def[:-1] - a*self.xs[:-1]**2-b*self.xs[:-1]
 		slice_locs = N.logical_and((R >= N.vstack(self.CDF_def[:-1])), (R < N.vstack(self.CDF_def[1:])))
 		for i in range(len(self.CDF_def)-1):
 			if slice_locs[i].any():
-				if a[i] == 0. :
-					x_samples[slice_locs[i]] = self.xs[i]+(R[slice_locs[i]]-self.CDF_def[i])/self.PDF_def[i]
+				if a[i] == 0.:
+					x_samples[slice_locs[i]] = self.xs[i] + (R[slice_locs[i]]-self.CDF_def[i]) / b[i]
 				else:
-					c = (R[slice_locs[i]]-self.CDF_def[i])
-					D = b[i]**2.-4.*a[i]*c
+					C = c[i]-R[slice_locs[i]]
+					D = b[i]**2.-4.*a[i]*C
 					x2 = (-b[i]+N.sqrt(D))/(2.*a[i])
-					x_samples[slice_locs[i]] = x2+self.xs[i]
-		weights = self.tot_integ/self(x_samples) 
+					x_samples[slice_locs[i]] = x2
+		weights = N.ones(len(R))
 		return x_samples, weights
 
 class PW_bilinear_distribution(object):
