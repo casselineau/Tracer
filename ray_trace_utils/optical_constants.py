@@ -2,7 +2,29 @@ import numpy as N
 from ray_trace_utils.electromagnetics import Drude_Lorentz_model, dielectric_to_refractive
 from scipy.interpolate import interp1d
 
-Sopra_data_loc = '../Sopra_Data'
+Sopra_data_loc = '/'.join(__file__.split('/')[:-1])+'/Sopra_Data'
+
+def get_from_Sopra(material):
+
+	class Newmat(optical_material):
+		'''
+		We use the decorator to declare data from Sopra database directly. Requires the instance to be created with source='Sopra' argument.
+		'''
+		@optical_material.source_check
+		def __init__(self):
+			optical_material.__init__(self, self.l_min, self.l_max)
+
+		@optical_material.check_valid
+		@optical_material.check_m_source
+		def m(self, lambdas):
+			pass
+
+	classdict = {}
+	for e in Newmat.__dict__.items():
+		classdict.update({e[0]:e[1]})
+	globals()[material] = type(material, (optical_material,), classdict)
+	return eval(material)(source='Sopra')
+
 
 class optical_material(object):
 

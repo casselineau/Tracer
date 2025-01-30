@@ -131,7 +131,7 @@ def edge_rays_directions(num_rays, ang_range):
 
 	return a
 
-def solar_disk_bundle(num_rays,  center,  direction,  radius, ang_range, flux=None, radius_in=0., angular_span=[0.,2.*N.pi], x_cut=None, procs=1, rays_direction=None):
+def disk_bundle(num_rays,  center,  direction,  radius, ang_range, flux=None, radius_in=0., angular_span=[0.,2.*N.pi], x_cut=None, procs=1, rays_direction=None):
 	"""
 	Generates a ray bundle emanating from a disk, with each surface element of 
 	the disk having the same ray density. The rays all point at directions uniformly 
@@ -197,7 +197,7 @@ def solar_disk_bundle(num_rays,  center,  direction,  radius, ang_range, flux=No
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)
 	return rayb
 
-def solar_rect_bundle(num_rays, center, direction, x, y, ang_range, flux=None, procs=1):
+def rect_bundle(num_rays, center, direction, x, y, ang_range, flux=None, procs=1):
 
 	a = pillbox_sunshape_directions(num_rays, ang_range)
 
