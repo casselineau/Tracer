@@ -14,14 +14,14 @@ class PW_linear_distribution(object):
 		self.CDF_def = N.add.accumulate(N.hstack([[0], self.integ]))/self.tot_integ
 
 	def find_slice(self, x):
-		comp = (N.round(x, decimals=7)>N.vstack(self.xs)).T
+		comp = (x>N.vstack(self.xs)).T
 		locs = N.sum(comp, axis=1)-1
 		return locs
 
 	def __call__(self, x):
 		loc = self.find_slice(x)
 		a, b = self.a[loc], self.b[loc]
-		return a*x+b
+		return a*x + b
 
 	def PDF(self, x):
 		return self(x)/self.tot_integ
@@ -99,26 +99,50 @@ class PW_lincos_distribution(PW_linear_distribution):
 		'''
 		xs and ys are the piecewise linear function values. The cos(xs) factor is added within the class
 		'''
-		PW_linear_distribution.__init__(self, xs, ys)
-		self.a = (self.ys[1:] - self.ys[:-1])/(self.xs[1:] - self.xs[:-1])
-		self.b = self.ys[:-1]-self.a*self.xs[:-1]
-		self.integ = ys[1:]*N.sin(xs[1:])-ys[:-1]*N.sin(xs[:-1]) + self.a*(N.cos(xs[1:])-N.cos(xs[:-1])) # Obtained throught integration by parts. 
-		self.tot_integ = N.sum(self.integ)
-		self.PDF_def = self.ys*N.cos(self.xs)/self.tot_integ
-		self.CDF_def = N.add.accumulate(N.hstack([[0], self.integ]))/self.tot_integ
+		PW_linear_distribution.__init__(self, xs, ys*N.cos(xs))
+		self.a_cos = (ys[1:] - ys[:-1])/(xs[1:] - xs[:-1])
+		self.b_cos = ys[:-1]-self.a_cos*xs[:-1]
+		self.integ_cos = ys[1:]*N.sin(xs[1:])-ys[:-1]*N.sin(xs[:-1]) + self.a_cos*(N.cos(xs[1:])-N.cos(xs[:-1])) # Obtained throught integration by parts.
+		self.tot_integ_cos = N.sum(self.integ_cos)
 
-	def __call__(self, x):
+	def f(self, x):
 		loc = self.find_slice(x)
-		return (self.a[loc]*x+self.b[loc])*N.cos(x)
+		a, b = self.a_cos[loc], self.b_cos[loc]
+		return (a*x + b) * N.cos(x)
 
-	def CDF(self, x):
-		loc = self.find_slice(x)
-		return self.CDF_def[loc] + (self(x)*N.sin(x)-self.ys[loc]*N.sin(self.xs[loc]) + self.a[loc]*(N.cos(self(x))-N.cos(self.xs[loc])))
-		
+	def PDF_cos(self, x):
+		return self.f(x)/self.tot_integ_cos
+
 	def sample(self, ns):
 		x_s, weights_s = super().sample(ns)
-		weights = weights_s*self.PDF(x_s)
-		weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
+		weights = weights_s * self.PDF_cos(x_s)/self.PDF(x_s)
+		weights *= ns/N.sum(weights) # rounding error correction
+		return x_s, weights
+
+class PW_lincossin_distribution(PW_linear_distribution):
+	def __init__(self, xs, ys):
+		'''
+		xs and ys are the piecewise linear function values. The cos(xs) factor is added within the class
+		'''
+		PW_linear_distribution.__init__(self, xs, ys*N.cos(xs)*N.sin(xs))
+		self.a_cossin = (ys[1:] - ys[:-1])/(xs[1:] - xs[:-1])
+		self.b_cossin = ys[:-1]-self.a_cossin*xs[:-1]
+		integral = ys/2.*N.sin(xs)**2.-N.hstack([self.a_cossin, self.a_cossin[-1]])/4.*(xs-N.sin(xs)*N.cos(xs)) # Obtained throught multiple integration by parts.
+		self.integ_cossin = integral[1:] - integral[:-1]
+		self.tot_integ_cossin = N.sum(self.integ_cossin)
+
+	def f(self, x):
+		loc = self.find_slice(x)
+		a, b = self.a_cossin[loc], self.b_cossin[loc]
+		return (a*x + b) * N.cos(x) * N.sin(x)
+
+	def PDF_cossin(self, x):
+		return self.f(x)/self.tot_integ_cossin
+
+	def sample(self, ns):
+		x_s, weights_s = super().sample(ns)
+		weights = weights_s * self.PDF_cossin(x_s)/self.PDF(x_s)
+		weights *= ns/N.sum(weights) # rounding error correction
 		return x_s, weights
 	
 class BDRF_distribution_noinc(object):

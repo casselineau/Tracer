@@ -740,21 +740,21 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	nrays 		Number of rays to trace
 	band		A list of 2 values, whose shape is different from 
 	'''
-	from ray_trace_utils.sampling import PW_lincos_distribution
+	from ray_trace_utils.sampling import PW_lincossin_distribution
 	# Build axisymmetrical emissions profile
 	# Integrate the emittance
 	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
 	bb_spectral_radiance_in_band = N.trapz(Planck(wls, T), wls)
 	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
 	# Sample the emmissions profile distribution to get directions and energy
-	thetas_rays, weights = PW_lincos_distribution(thetas, source_spectral_radiance).sample(nrays)
+	thetas_rays, weights = PW_lincossin_distribution(thetas, source_spectral_radiance).sample(nrays)
 	source_exitance = N.trapz(source_spectral_radiance*N.cos(thetas), thetas)
 	phis_rays = N.random.uniform(size=nrays)*2.*N.pi
 	directions = N.array([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
 	# rotate to make z the normals
 	for i,d in enumerate(directions.T):
 		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
-	energy = weights*source_exitance*area/nrays
+	energy = weights/N.sum(weights)*source_exitance*area
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
 	rayb.set_ref_index(N.ones(nrays))
 	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
