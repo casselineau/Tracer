@@ -53,7 +53,7 @@ def axes_and_angles_between(vecs, normals):
 	
 def rotate_z_to_normal(vecs, normals):
 	'''
-	Rotate vecs so that they consider normals as their +z. The rotation matrix is established so that it is the minimal rotation along the plane formed between each direction and their respective normal unlike the rotate_to_z alternative in the spatial_geometry module.
+	Rotate vecs so that they consider normals as their +z. The rotation matrix is established so that it is the minimal rotation along the plane formed between each direction and their respective normal unlike the rotate_to_z alternative in the tracer.spatial_geometry module.
 	'''
 	zs = N.zeros((vecs.shape))
 	zs[2] = 1.

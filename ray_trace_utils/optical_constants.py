@@ -5,7 +5,11 @@ from scipy.interpolate import interp1d
 Sopra_data_loc = '/'.join(__file__.split('/')[:-1])+'/Sopra_Data'
 
 def get_from_Sopra(material):
-
+	'''
+	Automatically creates an optical_material subclass with the name given in material (a string) and the properties of this material in the Sopra database, then returns a classe instance of this material.
+	The matwerial string argument is not case sensitve.
+	
+	'''
 	class Newmat(optical_material):
 		'''
 		We use the decorator to declare data from Sopra database directly. Requires the instance to be created with source='Sopra' argument.

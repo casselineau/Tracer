@@ -144,6 +144,11 @@ class PW_lincossin_distribution(PW_linear_distribution):
 		weights = weights_s * self.PDF_cossin(x_s)/self.PDF(x_s)
 		weights *= ns/N.sum(weights) # rounding error correction
 		return x_s, weights
+		
+class Henyey_Greenstein(object):
+	def __init__(self, g):
+	def __call__(self, th):
+	def sample(self, ns):
 	
 class BDRF_distribution_noinc(object):
 	def __init__(self, th_u, phi_u, bdrf):

@@ -205,6 +205,20 @@ def attenuations(path_lengths, k, lambda_0, energy):
 	T = N.exp(-4.*N.pi*k/lambda_0*path_lengths)
 	energy = T*energy
 	return energy
+	
+def scattering(sigma, intersection_path_lengths):
+	'''
+	Calculates randomly distributed scattereing path lengths for homogenous medium based on a scattering coefficient.
+	Arguments:
+	- sigma: scattering coefficient (m-1)
+	Returns:
+	 - boolean scattered, not scattered array
+	 - Uniformly sampled path lengths to scattering event fro scattered rays
+	'''
+	R = N.random.uniform(len(intersection_path_lengths))
+	scattered_path_lengths = -N.log(R)/sigma
+	scattered = scattered_path_lengths < intersection_path_lengths
+	return scattered, scattered_path_lengths
 
 def R_from_n_k(n1, n2, res=100):
 	thetas_in = N.vstack(N.linspace(0., N.pi/2., res))
