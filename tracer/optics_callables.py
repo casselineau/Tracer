@@ -24,6 +24,7 @@ Systematize creation based on keywords: WIP ideas
 - Reflected directions: 
 	- Lambertian = diffuse
 	- Specular = specular
+	- Real = ideal normal modified with a gaussian error in a given angular range (bivariate or conical)
 	- Directional = depends on phi and theta
 	- DirectionalAxisymmetric = depends on theta
 - Transmitted directions:
@@ -39,8 +40,14 @@ Systematize creation based on keywords: WIP ideas
 	
 Then we can introduce more general wrappers:
 - BSDF: informs about the whole behaviour.
-'''
 
+How to do this:
+- Make module hosted functions of:
+ 	- energy: attenuation, reflection, absorption, make them compatible with array operations for spectral and polychromatic operations
+ 	- normals: add error to normal vectors
+ 	- directions: specular reflections, refraction, bxdf sampling
+- Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls. 
+'''
 
 class OpticsCallable(object):
 	def reset(self):
@@ -613,7 +620,7 @@ class BDRF_Cook_Torrance_isotropic(OpticsCallable):
 		self.bdrf = BDRF_distribution(RegularGridInterpolator(points, bdrfs)) # This instance is a BDRF wilth all the necessary functions inclyuded for energy conservative sampling. /!\ Wavelength not included yet!				
 
 	def __call__(self, geometry, rays, selector):
-		#TODO: reflected direction orientation for non axisymmetric bdrf ##############################
+		# TODO: reflected direction orientation for non axisymmetric bdrf
 		# Incident directions in the frame of reference of the geometry
 		# find Normals
 		normals = geometry.get_normals()
@@ -773,7 +780,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 		Arguments:
 		n1, n2 - scalars representing the homogenous refractive index on each
 			side of the surface (order doesn't matter).
-		k1, k2 - extinction coefficients in each side of the surface. a1 corrsponds to n1, a2 to n2.
+		k1, k2 - extinction coefficients in each side of the surface. a1 corresponds to n1, a2 to n2.
 		single_ray - if True, refraction or reflection is decided for each ray
 			    based on the amount of reflection coefficient and only a single 
 			    ray is launched in the next bundle. Otherwise, the ray is split into
@@ -874,11 +881,19 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 		return reflected_rays + refracted_rays
 		
 class RefractiveScatteringHomogenous(RefractiveHomognous):
-	
+	'''
+	Same as RefractiveHomogenous but with sacttering in the medium.
+	Currently scattering is handled using a scattering coefficient and a Henyey-Greenstein phase function.
+	Argumnets:
+	n1, n2 - scalars representing the homogenous refractive index on each
+			side of the surface (order doesn't matter).
+	s_c - Scattering coefficient in m-1
+	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
+	'''
 	def __init__(self, n1, n2, s_c, g_HG, single_ray=True):
 		RefractiveHomognous.__init__(self, n1, n2, single_ray)
-		self.s_c = s_c # Scatteringf coefficient in m-1
-		self.Henyey_Greenstein = Henyey_Greenstein(g_HG) # Henyey-Greenstein phase function parameter
+		self.s_c = s_c #
+		self.phase_function = Henyey_Greenstein(g_HG) # Henyey-Greenstein phase function parameter
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -906,62 +921,63 @@ class RefractiveScatteringHomogenous(RefractiveHomognous):
 		# refracted rays in that order.
 		if scat.any()
 			scat_vertices = prev_inters[scat] + scattered_path_lengths*directions[:, sel_scat]
-			scat_ths, scat_phis = Henyey_Greenstein.sample(N.sum(scat))
-			scattered_directions = N.array([[N.sin(scat_ths)*N.cos(scat_phis)],[N.sin(scat_ths)*N.sin(scat_phis)],[N.cos(scat_ths)]])
-			scattered_directions = rotate_z_to_normals(scattered_directions, directions) # rotate  with z pointing in directions
+			scat_ths, scat_phis = self.phase_function.sample(N.sum(scat))
+			scat_directions = N.array([[N.sin(scat_ths)*N.cos(scat_phis)],[N.sin(scat_ths)*N.sin(scat_phis)],[N.cos(scat_ths)]])
+			scat_directions = rotate_z_to_normals(scat_directions, directions) # rotate  with z pointing in directions
 			
 			scattered_rays = rays.inherit(sel_scat, vertices=scat_vertices,
 							direction=scat_directions,
 							normals[:,scat]),
 							energy=energy[scat],
 							parents=sel_scat)
-		'''
+
 		if not refr.any():
-			rays.set_energy(energy, selector=selector)
-			return perfect_mirror(geometry, rays, selector)
-		
+			rays.set_energy(energy, selector=sel_nonscat)
+			return perfect_mirror(geometry, rays, sel_nonscat)
+
 		# Reflected energy:
-		R = N.ones(len(selector))
-		R[refr] = optics.fresnel(directions[:,selector][:,refr],
+		R = N.ones(len(sel_nonscat))
+		R[refr] = optics.fresnel(directions[:,sel_nonscat][:,refr],
 			normals[:,refr], n1[refr], n2[refr])
 
 		if self._single_ray:
 			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
 			refl = N.random.uniform(size=R.shape)<=R
-			# reflected rays are TIR OR rays selected to go to reflection
+			# Reflected rays are TIR OR rays selected to go to reflection
 			sel_refl = selector[refl]
 			sel_refr = selector[~refl]
-			dirs_refr = N.zeros((3, len(selector)))
+			dirs_refr = N.zeros((3, len(sel_refr)))
 			dirs_refr[:,refr] = out_dirs
-			dirs_refr = dirs_refr[:,~refl]
-			
-			reflected_rays = rays.inherit(sel_refl, vertices=inters[:,refl],
-				direction=optics.reflections(
-					directions[:,sel_refl],
-					normals[:,refl]),
+
+			reflected_rays = rays.inherit(sel_refl,
+				vertices=inters[:,refl],
+				direction=optics.reflections(directions[:,sel_refl], normals[:,refl]),
 				energy=energy[refl],
 				parents=sel_refl)
-		
-			refracted_rays = rays.inherit(sel_refr, vertices=inters[:,~refl],
-				direction=dirs_refr, parents=sel_refr,
+
+			refracted_rays = rays.inherit(sel_refr,
+				vertices=inters[:,~refl],
+				direction=dirs_refr,
+				parents=sel_refr,
 				energy=energy[~refl],
 				ref_index=n2[~refl])
-			
+
 		else:
-			reflected_rays = rays.inherit(selector, vertices=inters,
-				direction=optics.reflections(
-					directions[:,selector],
-					normals),
+			reflected_rays = rays.inherit(sel_nonscat,
+				vertices=inters,
+				direction=optics.reflections(directions[:,sel_nonscat],normals),
 				energy=energy*R,
-				parents=selector)
-		
-			refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
-				direction=out_dirs, parents=selector[refr],
+				parents=sel_nonscat)
+
+			refracted_rays = rays.inherit(selector[refr],
+				vertices=inters[:,refr],
+				direction=out_dirs,
+				parents=selector[refr],
 				energy=energy[refr]*(1 - R[refr]),
 				ref_index=n2[refr])
 
-		return reflected_rays + refracted_rays
-		'''
+		return scattered_rays + reflected_rays + refracted_rays
+
 class FresnelConductorHomogenous(OpticsCallable):
 	'''
 	Fresnel equation with a conductive medium instersected. The attenuation is total in a very short range in the intersected metal and refraction is not modelled. Only strictly valid for k2 >> 1 and in situations where the refracted ray is not interacting with the scene again (eg. not traversing thin metal volumes).

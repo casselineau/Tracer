@@ -146,9 +146,24 @@ class PW_lincossin_distribution(PW_linear_distribution):
 		return x_s, weights
 		
 class Henyey_Greenstein(object):
-	def __init__(self, g):
+	def __init__(self, g, ths_integ=N.linspace(0., N.pi, 100)):
+		'''
+		g is the Henyey-Greenstein parameter hand has a value between -1 and 1
+		:param g:
+		'''
+		self.g = g
+
 	def __call__(self, th):
+		return 1./2*(1.-self.g**2)/((1+self.g**2-2*self.g*(N.cos(th)))**(3./2.)) # note: there is a mistake in PBRT on this
+
 	def sample(self, ns):
+		R = N.random.uniform(size=ns)
+		s = 2 * R - 1.
+		phis = 2.*N.pi*N.random.uniform(size=ns)
+		if self.g == 0:
+			return N.arccos(s), phis
+		else: # CDF integration found at https://www.astro.umd.edu/~jph/HG_note.pdf
+			return N.arccos(1./(2*self.g)*(1.+self.g**2-((1.-self.g**2)/(1.+self.g*s))**2)), phis
 	
 class BDRF_distribution_noinc(object):
 	def __init__(self, th_u, phi_u, bdrf):
