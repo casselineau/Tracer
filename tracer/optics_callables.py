@@ -891,7 +891,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
 	def __init__(self, n1, n2, s_c, g_HG, single_ray=True):
-		RefractiveHomognous.__init__(self, n1, n2, single_ray)
+		RefractiveHomogenous.__init__(self, n1, n2, single_ray)
 		self.s_c = s_c #
 		self.phase_function = Henyey_Greenstein(g_HG) # Henyey-Greenstein phase function parameter
 
