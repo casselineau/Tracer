@@ -880,7 +880,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 
 		return reflected_rays + refracted_rays
 		
-class RefractiveScatteringHomogenous(RefractiveHomognous):
+class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	'''
 	Same as RefractiveHomogenous but with sacttering in the medium.
 	Currently scattering is handled using a scattering coefficient and a Henyey-Greenstein phase function.
