@@ -907,7 +907,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 		inters = geometry.get_intersection_points_global()
 		prev_inters = rays.get_vertices(selector)
 		intersection_path_lengths = N.sqrt(N.sum((inters-prev_inters)**2, axis=0))
-		scat, scattered_path_lengths = optics.scattering(sigma, intersection_path_lengths)
+		scat, scattered_path_lengths = optics.scattering(self.s_c, intersection_path_lengths)
 		sel_scat = selector[scat]
 		sel_nonscat = selector[~scat]
 
