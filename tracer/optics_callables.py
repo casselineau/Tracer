@@ -9,7 +9,7 @@ from scipy.interpolate import RegularGridInterpolator
 #from BDRF_models import Cook_Torrance, regular_grid_Cook_Torrance
 from tracer.ray_bundle import RayBundle
 from ray_trace_utils.sampling import BDRF_distribution, Henyey_Greenstein
-from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normals
+from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
 
 import sys, inspect
