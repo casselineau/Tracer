@@ -927,7 +927,7 @@ class RefractiveScatteringHomogenous(RefractiveHomognous):
 			
 			scattered_rays = rays.inherit(sel_scat, vertices=scat_vertices,
 							direction=scat_directions,
-							normals[:,scat]),
+							normals[:,scat],
 							energy=energy[scat],
 							parents=sel_scat)
 
