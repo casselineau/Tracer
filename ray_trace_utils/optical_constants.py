@@ -1,7 +1,9 @@
 import numpy as N
 from ray_trace_utils.electromagnetics import Drude_Lorentz_model, dielectric_to_refractive
 from scipy.interpolate import interp1d
+import os
 
+<<<<<<< HEAD
 Sopra_data_loc = '/'.join(__file__.split('/')[:-1])+'/Sopra_Data'
 
 def get_from_Sopra(material):
@@ -29,6 +31,9 @@ def get_from_Sopra(material):
 	globals()[material] = type(material, (optical_material,), classdict)
 	return eval(material)(source='Sopra')
 
+=======
+Sopra_data_loc = os.path.dirname(os.path.abspath(__file__))+'/Sopra_Data'
+>>>>>>> master
 
 class optical_material(object):
 
