@@ -215,7 +215,7 @@ def scattering(sigma, intersection_path_lengths):
 	 - boolean scattered, not scattered array
 	 - Uniformly sampled path lengths to scattering event fro scattered rays
 	'''
-	R = N.random.uniform(len(intersection_path_lengths))
+	R = N.random.uniform(size=len(intersection_path_lengths))
 	scattered_path_lengths = -N.log(R)/sigma
 	scattered = scattered_path_lengths < intersection_path_lengths
 	return scattered, scattered_path_lengths

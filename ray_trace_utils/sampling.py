@@ -154,7 +154,7 @@ class Henyey_Greenstein(object):
 		self.g = g
 
 	def __call__(self, th):
-		return 1./2*(1.-self.g**2)/((1+self.g**2-2*self.g*(N.cos(th)))**(3./2.)) # note: there is a mistake in PBRT on this
+		return 1./(4.*N.pi)*(1.-self.g**2)/((1+self.g**2-2*self.g*(N.cos(th)))**(3./2.)) # note: there is a mistake in PBRT on this
 
 	def sample(self, ns):
 		R = N.random.uniform(size=ns)
