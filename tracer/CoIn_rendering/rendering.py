@@ -1,14 +1,10 @@
 #SOGUI_BINDING="Quarter"
 
-
 from pivy import coin
 from pivy.sogui import *
 
 import numpy as N
 import sys
-
-
-
 
 class Renderer():
 	'''	__________________________________________________________________________________________________
@@ -194,8 +190,8 @@ Reference:
 					c2 = sv[:,ray] + sd[:,ray]*l
 					co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
-			color=((1.-float(level)/lentree)*255,0,0)
-
+			color=(int((1.-float(level)/lentree)*255),0,0)
+			
 			no1 = coin.SoSeparator()
 
 			ma1 = coin.SoMaterial()

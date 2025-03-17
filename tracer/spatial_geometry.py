@@ -15,7 +15,7 @@ def general_axis_rotation(axis,  ang):
     Returns: A 3x3 array representing the matrix of rotation.
     Reference: [1] p.47
     """
-    s = N.round_(sin(ang), decimals=14); c = N.round_(cos(ang), decimals=14); v = 1 - c
+    s = N.round(sin(ang), decimals=14); c = N.round(cos(ang), decimals=14); v = 1 - c
     add = N.array([[0,   -axis[2], axis[1]],  
                 [axis[2],  0,    -axis[0]], 
                 [-axis[1], axis[0],  0   ]])

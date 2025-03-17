@@ -17,6 +17,25 @@ import sys, inspect
 '''
 TODO:
 Systematize creation based on keywords: WIP ideas
+Accountant declaration: mix energy, direction and spectral accounting with keywords.
+They have to be compatible to automatically subclass.
+By defaults all accountants store ray positions for now as fluxmapping is the basic use of these.
+- Energy accounting: Need to make these compatibles
+	- Absorption accountant: counts what is absorbed locally. Receiver
+	- Scattered accountant: counts what leaves the interaction. Scatterer
+- Directions accounting:
+	- Direction accountant: incident direction stored. Directional
+	- Bidirectional accountant: incident and scattered. Bidirectional
+- Spectral accountant: 
+	- Spectral accountant: stores ray wavelengths. Spectro
+	- Polychromatic accountant: stores ray spectra. Polychromatic
+
+Accountants shortname examples to append at then end of the optical callable for automatic instancing:
+Option: Use the capital letters instead of teh full name? 
+SpectroDirectionalReceiver (SDR): stores the hit location, absorbed energy, direction and wavelength of the rays
+BidirectionalScatterer (BS): stores the hit location, the incident and scattering direction of the rays.
+
+Optical behaviours: dictates how ras are handled
 - Incident directions: 
 	- nothing = isotropic property
 	- Directional = Depends on Phi and theta
@@ -883,100 +902,165 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	'''
 	Same as RefractiveHomogenous but with sacttering in the medium.
+	
+	On interaction:
+	1 - check if thee is any scattering
+		1 - a) if scattering, perform the calculation of teh scattering directions using H-G.
+	2 - If there is some non-scatterred light, it reaches a surface
+		2 - a) Evaluate the refraction at that surface: rays can totally internally reflect 
+		or refract 
+		2 - b) If refraction event, choose wether to reflect or refract out of the surfcae 
+		based on a random number
+	3 - regroup rays and output bundle
+	
 	Currently scattering is handled using a scattering coefficient and a Henyey-Greenstein phase function.
-	Argumnets:
+	
+	Arguments:
 	n1, n2 - scalars representing the homogenous refractive index on each
 			side of the surface (order doesn't matter).
-	s_c - Scattering coefficient in m-1
+	s_c1, s_c2 - Scattering coefficients of medium 1 and medium 2 in m-1
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
-	def __init__(self, n1, n2, s_c, g_HG, single_ray=True):
+	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True):
 		RefractiveHomogenous.__init__(self, n1, n2, single_ray)
-		self.s_c = s_c # Scattering coefficient (m-1)
+		
+		self._s_cs = [s_c1, s_c2] #
 		self.phase_function = Henyey_Greenstein(g_HG) # Henyey-Greenstein phase function parameter
+		
+	def toggle_media(self, current_ref_idx, current_s_c):
+		"""
+		Determines which refractive index to use based on the refractive index and scattering
+		coefficient of the rays currently travelling through.
+
+		Arguments:
+		current_ref_idx, current_s_c - arrays of the refractive indices and scattering 
+		coefficients of the materials each of the rays in a ray bundle is travelling through.
+		
+		Returns:
+		An array of length(n) with the index to use for each ray.
+		"""
+		new_idx = self.toggle_ref_idx(current_ref_idx)
+		new_s_c = N.where(current_s_c == self._s_cs[0], 
+			self._s_cs[1], self._s_cs[0])
+
+		return new_idx, new_s_c
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
 			return ray_bundle.empty_bund()
-			
-		normals = geometry.get_normals()
-		directions = rays.get_directions()
-		energy = rays.get_energy()
+
+		# General raybundle variables
+		normals = geometry.get_normals() # one normal per intresection found
+		inters = geometry.get_intersection_points_global() # one vertex per intresection found
+		directions = rays.get_directions() # one unit direction vector per ray
+		energy = rays.get_energy() # value per ray
 					
 		# Check for scattering
-		inters = geometry.get_intersection_points_global()
 		prev_inters = rays.get_vertices(selector)
 		intersection_path_lengths = N.sqrt(N.sum((inters-prev_inters)**2, axis=0))
-		scat, scattered_path_lengths = optics.scattering(self.s_c, intersection_path_lengths)
-		sel_scat = selector[scat]
-		sel_nonscat = selector[~scat]
-
-		# Check for refractions:	
-		n1 = rays.get_ref_index()[sel_nonscat]
-		n2 = self.toggle_ref_idx(n1)
-		refr, out_dirs = optics.refractions(n1, n2,
-			directions[:,sel_nonscat], normals) # refr here notes non TIR situations
-
+		s_cs = rays.get_scat_coeff(selector)
+		
+		# Determine which ray gets scattered:
+		scat, scattered_path_lengths = optics.scattering(s_cs, intersection_path_lengths)
+		sel_scat = selector[scat] # indices of the scattered rays in the whole incident bundle
+		sel_nonscat = selector[~scat] # indices of the non-scattered rays in the whole incident bundle
+		
 		# The output bundle is generated by stacking together the scattered, reflected and
 		# refracted rays in that order.
-		if scat.any():
-			scat_vertices = prev_inters[scat] + scattered_path_lengths*directions[:, sel_scat]
+		
+		# Scattered rays:
+		if len(sel_scat):
+			scat_vertices = prev_inters[:,scat] + scattered_path_lengths[scat]*directions[:, sel_scat]
 			scat_ths, scat_phis = self.phase_function.sample(N.sum(scat))
-			scat_directions = N.array([[N.sin(scat_ths)*N.cos(scat_phis)],[N.sin(scat_ths)*N.sin(scat_phis)],[N.cos(scat_ths)]])
-			scat_directions = rotate_z_to_normals(scat_directions, directions) # rotate  with z pointing in directions
+			scat_directions = N.array([N.sin(scat_ths)*N.cos(scat_phis),
+								N.sin(scat_ths)*N.sin(scat_phis), 
+								N.cos(scat_ths)])
+			scat_directions = rotate_z_to_normal(scat_directions, directions[:, sel_scat]) # rotate  with z pointing in directions
 			
 			scattered_rays = rays.inherit(sel_scat, vertices=scat_vertices,
 							direction=scat_directions,
-							normals=normals[:,scat],
-							energy=energy[scat],
+							energy=energy[sel_scat],
 							parents=sel_scat)
 
-		if not refr.any():
-			rays.set_energy(energy, selector=sel_nonscat)
-			return perfect_mirror(geometry, rays, sel_nonscat)
+		# Are there non-scattered rays?
+		if len(sel_nonscat):
+			# Check for refractions:
+			n1 = rays.get_ref_index(sel_nonscat)
+			s_cs = rays.get_scat_coeff(sel_nonscat)
+			n2, s_c = self.toggle_media(n1, s_cs)
+			refr, refr_dirs = optics.refractions(n1, n2,
+				directions[:,sel_nonscat], normals[:,~scat]) # refr here notes non TIR situations
+			
+			nonscat_inters = inters[:,~scat]
+			
+			all_TIR = not refr.any()
+			
+			if all_TIR: # All TIR in refracted
+				reflected_rays = rays.inherit(sel_nonscat,
+					vertices=nonscat_inters,
+					direction=optics.reflections(directions[:,sel_nonscat], normals[:,~scat]),
+					energy=energy[sel_nonscat],
+					parents=sel_nonscat)
 
-		# Reflected energy:
-		R = N.ones(len(sel_nonscat))
-		R[refr] = optics.fresnel(directions[:,sel_nonscat][:,refr],
-			normals[:,refr], n1[refr], n2[refr])
+			else:
+				# Reflected energy:
+				R = N.ones(len(sel_nonscat))
+				R[refr] = optics.fresnel(directions[:,sel_nonscat][:,refr],
+					normals[:,~scat][:,refr], n1[refr], n2[refr]) # TIR are left to 1 magically here.
 
-		if self._single_ray:
-			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
-			refl = N.random.uniform(size=R.shape)<=R
-			# Reflected rays are TIR OR rays selected to go to reflection
-			sel_refl = selector[refl]
-			sel_refr = selector[~refl]
-			dirs_refr = N.zeros((3, len(sel_refr)))
-			dirs_refr[:,refr] = out_dirs
+				if self._single_ray:
+					# Draw probability of reflection or refraction out of the reflected energy of refraction events:
+					refl = N.random.uniform(size=R.shape)<=R
+					
+					# Reflected rays are TIR OR rays selected to go to reflection. 
+					# Rays reflect all incident energy or transmit fully
+					sel_refl = sel_nonscat[refl]
+					sel_refr = sel_nonscat[~refl]
 
-			reflected_rays = rays.inherit(sel_refl,
-				vertices=inters[:,refl],
-				direction=optics.reflections(directions[:,sel_refl], normals[:,refl]),
-				energy=energy[refl],
-				parents=sel_refl)
+					reflected_rays = rays.inherit(sel_refl,
+						vertices=nonscat_inters[:,refl],
+						direction=optics.reflections(directions[:,sel_refl], normals[:,~scat][:,refl]),
+						energy=energy[sel_refl],
+						parents=sel_refl)
 
-			refracted_rays = rays.inherit(sel_refr,
-				vertices=inters[:,~refl],
-				direction=dirs_refr,
-				parents=sel_refr,
-				energy=energy[~refl],
-				ref_index=n2[~refl])
+					dirs_refr = refr_dirs[:, ~refl[R<1.]]
+					refracted_rays = rays.inherit(sel_refr,
+						vertices=nonscat_inters[:,~refl],
+						direction=dirs_refr,
+						parents=sel_refr,
+						energy=energy[sel_refr],
+						ref_index=n2[~refl], 
+						scat_coeff=s_c[~refl])
 
+				else:
+					reflected_rays = rays.inherit(sel_nonscat,
+						vertices=inters,
+						direction=optics.reflections(directions[:,sel_nonscat],normals),
+						energy=energy*R,
+						parents=sel_nonscat)
+
+					refracted_rays = rays.inherit(selector[refr],
+						vertices=inters[:,refr],
+						direction=out_dirs,
+						parents=selector[refr],
+						energy=energy[refr]*(1 - R[refr]),
+						ref_index=n2[refr],
+						scat_coeff=s_c[refr])
+										
+		if len(sel_scat):
+			if len(sel_nonscat):
+				if all_TIR:
+					ret_bundle = scattered_rays + reflected_rays
+				else:
+					ret_bundle = scattered_rays + reflected_rays + refracted_rays
+			else:
+				ret_bundle = scattered_rays
 		else:
-			reflected_rays = rays.inherit(sel_nonscat,
-				vertices=inters,
-				direction=optics.reflections(directions[:,sel_nonscat],normals),
-				energy=energy*R,
-				parents=sel_nonscat)
-
-			refracted_rays = rays.inherit(selector[refr],
-				vertices=inters[:,refr],
-				direction=out_dirs,
-				parents=selector[refr],
-				energy=energy[refr]*(1 - R[refr]),
-				ref_index=n2[refr])
-
-		return scattered_rays + reflected_rays + refracted_rays
+			if all_TIR:
+				ret_bundle = reflected_rays
+			else:
+				ret_bundle = reflected_rays + refracted_rays
+		return ret_bundle
 
 class FresnelConductorHomogenous(OpticsCallable):
 	'''
@@ -1015,10 +1099,10 @@ class FresnelConductorHomogenous(OpticsCallable):
 		
 		return reflected_rays
 
-class TransmissionAccountant(OpticsCallable):
+class ScatteredAccountant(OpticsCallable):
 	'''
 	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy that was transmitted from each ray.
+	in all iterations, and the energy that was transmitted for each ray.
 	'''
 	def __init__(self, real_optics, *args, **kwargs):
 		"""
@@ -1026,7 +1110,7 @@ class TransmissionAccountant(OpticsCallable):
 		real_optics - the optics manager class to actually use. Expected to
 			have the _abs protected attribute, and accept absorptivity as its
 			only constructor argument (as in Reflective and
-			Lambertian below).
+			Lambertian).
 		"""
 		self._opt = real_optics(*args, **kwargs)
 		self.reset()
@@ -1037,10 +1121,10 @@ class TransmissionAccountant(OpticsCallable):
 		self._hits = []
 	
 	def __call__(self, geometry, rays, selector):
-		ein = energy[selector]
 		self._hits.append(geometry.get_intersection_points_global())
 		newb = self._opt(geometry, rays, selector)
-		self._transmitted.append(ein)
+		eout = newb.get_energy()
+		self._scattered.append(eout)
 		return newb
 	
 	def get_all_hits(self):
@@ -1439,8 +1523,8 @@ def make_polychromatic_accountant_class(name, parent):
 
 def make_accountant_classes(name, optical_class):
 
-	# dictionary of keywords and asosciate accountants
-	accountants_dict = {'Receiver':AbsorptionAccountant, 'Detector':DirectionAccountant, 'Orientor':NormalAccountant, 'Transmitter':TransmissionAccountant}
+	# dictionary of keywords and associate accountants
+	accountants_dict = {'Receiver':AbsorptionAccountant, 'Detector':DirectionAccountant, 'Orientor':NormalAccountant, 'Transmitter':ScatteringAccountant}
 	
 	# Make all combinations of accountants and spectral accountants for the optical_class given.
 	for i in accountants_dict.items():
