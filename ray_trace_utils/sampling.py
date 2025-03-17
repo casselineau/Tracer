@@ -154,7 +154,7 @@ class Henyey_Greenstein(object):
 		self.g = g
 
 	def __call__(self, th):
-		return 1./2*(1.-self.g**2)/((1+self.g**2-2*self.g*(N.cos(th)))**(3./2.)) # note: there is a mistake in PBRT on this
+		return 1./2 * (1.-self.g**2) / ((1 + self.g**2 -2*self.g*(N.cos(th)))**(3./2.)) # note: there is a mistake in PBRT on this
 
 	def sample(self, ns):
 		R = N.random.uniform(size=ns)
@@ -295,7 +295,7 @@ def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
 	Uniformly samples a cylinder surface or volume if volume argument is True
 	Surface sampling also returns surface normal vetcors at the sampled points locations.
 	'''
-	zs = N.random.uniform(size=ns)*h-h/2.
+	zs = h*(N.random.uniform(size=ns)-1./2.)
 	if volume == False:
 		ths = N.random.uniform(size=ns)*2.*N.pi
 		positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])

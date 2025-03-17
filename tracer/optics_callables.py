@@ -892,7 +892,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	'''
 	def __init__(self, n1, n2, s_c, g_HG, single_ray=True):
 		RefractiveHomogenous.__init__(self, n1, n2, single_ray)
-		self.s_c = s_c #
+		self.s_c = s_c # Scattering coefficient (m-1)
 		self.phase_function = Henyey_Greenstein(g_HG) # Henyey-Greenstein phase function parameter
 
 	def __call__(self, geometry, rays, selector):

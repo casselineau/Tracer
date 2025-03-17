@@ -596,7 +596,7 @@ def trapezoid_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux=
 
 	return rayb
 
-def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , rays_in=True, procs=1, angular_span=[0.,2.*N.pi], angular_range=N.pi/2.):
+def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , rays_in=True, angular_span=[0.,2.*N.pi], angular_range=N.pi/2.):
 	'''
 	Generate a frustum shaped lambertian source with randomly situated rays to compute view factors. The overall energy of the bundle is 1.
 
@@ -659,16 +659,16 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
 	directions = N.dot(perp_rot, local_unit)
 
 	if flux == None:
-		energy = N.ones(num_rays)/float(num_rays)/procs
+		energy = N.ones(num_rays)/float(num_rays)
 	else:
 		area = (angular_span[1]-angular_span[0])*(r1+r0)/2.*N.sqrt(abs(r1-r0)**2.+depth**2.)
-		energy = N.ones(num_rays)*flux*area/float(num_rays)/procs
+		energy = N.ones(num_rays)*flux*area/float(num_rays)
 
 	rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
 	return rayb
 
-def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=True, procs=1, angular_span=[0.,2.*N.pi], ang_range=N.pi/2.):
+def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=True, angular_span=[0.,2.*N.pi], ang_range=N.pi/2.):
 	'''
 	Generate a cylinder shaped lambertian source with randomly situated rays to compute view factors. The overall energy of the bundle is 1.
 
@@ -712,15 +712,12 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 	perp_rot = rotation_to_z(direction)
 	vertices_global = N.dot(perp_rot, vertices_local)
 	directions = N.dot(perp_rot, local_unit)
-	'''
-	plt.hist(vertices_local[2,:]/(N.sqrt(vertices_local[0,:]**2.+vertices_local[1,:]**2.)))
-	plt.show()
-	'''
+
 	if flux == None:
-		energy = N.ones(num_rays)/float(num_rays)/procs
+		energy = N.ones(num_rays)/float(num_rays)
 	else:
 		area = rc*(angular_span[1]-angular_span[0])*lc
-		energy = N.ones(num_rays)*flux*area/float(num_rays)/procs
+		energy = N.ones(num_rays)*flux*area/float(num_rays)
 
 	rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
@@ -734,29 +731,29 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	positions 	ray positions
 	normals  	normals to the surface at teh ray positions.
 	thetas 	 	angles at which emittances are given
-	band_emittance if a number, the band hemispherical emittance, 
-				if a 1D array of the length of thetas, the directional band emittances
+	band_emittance 	if a number, the band hemispherical emittance,
+					if a 1D array of the length of thetas, the directional band emittances
 	T  			Temperature of the emitter
 	nrays 		Number of rays to trace
-	band		A list of 2 values, whose shape is different from 
+	band		A list of 2 values delimiting the spectral band
 	'''
 	from ray_trace_utils.sampling import PW_lincossin_distribution
 	# Build axisymmetrical emissions profile
 	# Integrate the emittance
 	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
-	bb_spectral_radiance_in_band = N.trapz(Planck(wls, T), wls)
+	bb_spectral_radiance_in_band = N.trapezoid(Planck(wls, T), wls)
 	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
 	# Sample the emmissions profile distribution to get directions and energy
 	thetas_rays, weights = PW_lincossin_distribution(thetas, source_spectral_radiance).sample(nrays)
-	source_exitance = N.trapz(source_spectral_radiance*N.cos(thetas), thetas)
+	source_exitance = N.trapezoid(source_spectral_radiance*N.cos(thetas), thetas)
 	phis_rays = N.random.uniform(size=nrays)*2.*N.pi
 	directions = N.array([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
-	# rotate to make z the normals
+	# Rotate to make z the normals
 	for i,d in enumerate(directions.T):
 		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
 	energy = weights/N.sum(weights)*source_exitance*area
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
 	rayb.set_ref_index(N.ones(nrays))
 	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
-	rayb._create_property('wavelengths', N.ones(nrays)*N.sum(band)/2.)
+	rayb._create_property('wavelengths', N.ones(nrays)*wl_avg)
 	return rayb
