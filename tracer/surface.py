@@ -95,9 +95,9 @@ class Surface(HasFrame):
 		
 	def update_current_bundle(self, bundle):
 		'''
-		When ray-tracing is performed sequentially to cull potential iintersection 
+		When ray-tracing is performed sequentially to cull potential intersection
 		tests, the surface registers the full bundle in sequences. To include the 
-		consolidated ray bndle, the current bundle is rebased with this function.
+		consolidated ray bundle, the current bundle is rebased with this function.
 		'''
 		self._current_bundle = bundle
 	

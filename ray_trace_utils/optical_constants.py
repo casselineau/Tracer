@@ -1,7 +1,6 @@
 import numpy as N
 from ray_trace_utils.electromagnetics import Drude_Lorentz_model, dielectric_to_refractive
 from scipy.interpolate import interp1d
-import os
 
 Sopra_data_loc = '/'.join(__file__.split('/')[:-1])+'/Sopra_Data'
 
