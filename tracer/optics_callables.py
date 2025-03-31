@@ -2,7 +2,7 @@
 # A collection of callables and tools for creating them, that may be used for
 # the optics-callable part of a Surface object.
 
-from . import optics, ray_bundle, sources
+from tracer import optics, ray_bundle, sources
 from .spatial_geometry import rotation_to_z
 import numpy as N
 from scipy.interpolate import RegularGridInterpolator
@@ -11,11 +11,13 @@ from tracer.ray_bundle import RayBundle
 from ray_trace_utils.sampling import BDRF_distribution, Henyey_Greenstein
 from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
+from abc import ABC, abstractmethod
+from itertools import combinations
 
 import sys, inspect
 
 '''
-TODO:
+#TODO:
 Systematize creation based on keywords: WIP ideas
 Accountant declaration: mix energy, direction and spectral accounting with keywords.
 They have to be compatible to automatically subclass.
@@ -23,17 +25,23 @@ By defaults all accountants store ray positions for now as fluxmapping is the ba
 - Energy accounting: Need to make these compatibles
 	- Absorption accountant: counts what is absorbed locally. Receiver
 	- Scattered accountant: counts what leaves the interaction. Scatterer
+	- Spectral accountant: stores ray wavelengths. Spectro
+	- Polychromatic accountant: stores ray spectra. Polychromatic
+- Location accountant: stores the hits
 - Directions accounting:
 	- Direction accountant: incident direction stored. Directional
 	- Bidirectional accountant: incident and scattered. Bidirectional
-- Spectral accountant: 
-	- Spectral accountant: stores ray wavelengths. Spectro
-	- Polychromatic accountant: stores ray spectra. Polychromatic
-
+ 
 Accountants shortname examples to append at then end of the optical callable for automatic instancing:
 Option: Use the capital letters instead of teh full name? 
 SpectroDirectionalReceiver (SDR): stores the hit location, absorbed energy, direction and wavelength of the rays
 BidirectionalScatterer (BS): stores the hit location, the incident and scattering direction of the rays.
+
+Polychromatic optical managers: figure-out how to declare and maintain spectra throughout the simulations without 
+storing excessive wavelength information
+Spectra could be declared in the optics and used as reference. 
+Ideally, the full simulation uses the exact same spectral description and each element has its own values for the 
+relevant properties. This would make a spectrum Class useful as a single reference.
 
 Optical behaviours: dictates how ras are handled
 - Incident directions: 
@@ -55,7 +63,7 @@ Optical behaviours: dictates how ras are handled
 - Spectrum:
 	- Nothing = Spectral band approximation, properties valid for all rays
 	- Spectral = one wl per ray
-	- Polychromatic = Rays carry multiple wls
+	- Polychromatic = Rays carry full piecewise linear spectra
 	
 Then we can introduce more general wrappers:
 - BSDF: informs about the whole behaviour.
@@ -67,19 +75,7 @@ How to do this:
  	- directions: specular reflections, refraction, bxdf sampling
 - Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls. 
 '''
-
-class OpticsCallable(object):
-	def reset(self):
-		pass
-		
-	def get_incident_angles(self, directions, normals):
-		vertical = N.sum(directions*normals, axis=0)*normals
-		return N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
-		
-	def project_to_normals(self, directions, normals):
-		return N.sum(rotation_to_z(normals.T) * directions.T[:,None,:], axis=2).T
-
-class Transparent(OpticsCallable):
+class Transparent(object):
 	"""
 	Generates a function that simply intercepts rays but does not change any of their properties.
 	
@@ -102,7 +98,7 @@ class Transparent(OpticsCallable):
 		return outg
 
 
-class Reflective(OpticsCallable):
+class Reflective(object):
 	"""
 	Generates a function that represents the optics of an opaque, absorptive
 	surface with specular reflections.
@@ -128,7 +124,26 @@ class Reflective(OpticsCallable):
 
 		return outg
 
-class Reflective_IAM(OpticsCallable):
+class OneSidedReflective(Reflective):
+	"""
+	This optics manager behaves similarly to the ReflectiveReceiver class,
+	but adds directionality. In this way a simple one-side receiver doesn't
+	necessitate an extra surface in the back.
+	"""
+	def __call__(self, geometry, rays, selector):
+		"""
+		Rays coming from the "up" side are reflected like in a Reflective
+		instance, rays coming from the "down" side have their energy set to 0.
+		As usual, "up" is the surface's Z axis.
+		"""
+		outg = Reflective.__call__(self, geometry, rays, selector)
+		energy = outg.get_energy()
+		proj = N.sum(rays.get_directions()[:,selector] * geometry.up()[:,None], axis=0)
+		energy[proj > 0] = 0
+		outg.set_energy(energy)
+		return outg
+
+class Reflective_IAM(object):
 	'''
 	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
@@ -152,7 +167,7 @@ class Reflective_IAM(OpticsCallable):
 
 		return outg
 
-class Reflective_mod_IAM(OpticsCallable):
+class Reflective_mod_IAM(object):
 	'''
 	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
@@ -178,7 +193,7 @@ class Reflective_mod_IAM(OpticsCallable):
 		return outg
 
 
-class Lambertian_IAM(OpticsCallable):
+class Lambertian_IAM(object):
 	'''
 	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
@@ -206,7 +221,7 @@ class Lambertian_IAM(OpticsCallable):
 
 		return outg
 
-class Lambertian_mod_IAM(OpticsCallable):
+class Lambertian_mod_IAM(object):
 	'''
 	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
@@ -235,7 +250,7 @@ class Lambertian_mod_IAM(OpticsCallable):
 
 		return outg
 
-class Lambertian_directional_axisymmetric_piecewise(OpticsCallable):
+class Lambertian_directional_axisymmetric_piecewise(object):
 	'''
 	Generates a function that performs diffuse reflections off opaque surfaces whose angular absorptance (axisymmetrical) is interpolated from discrete angular values.
 	'''
@@ -268,7 +283,7 @@ class Lambertian_directional_axisymmetric_piecewise(OpticsCallable):
 
 		return outg
 
-class Lambertian_directional_axisymmetric_piecewise_spectral(OpticsCallable):
+class Lambertian_directional_axisymmetric_piecewise_spectral(object):
 	'''
 	Generates a function that performs diffuse reflections off opaque surfaces whose spectral angular absorptance (axisymmetrical) is interpolated from discrete angular and spectral values.
 	'''
@@ -298,7 +313,7 @@ class Lambertian_directional_axisymmetric_piecewise_spectral(OpticsCallable):
 			parents=selector)
 		return outg
 
-class Lambertian_directional_axisymmetric_piecewise_Polychromatic(OpticsCallable):
+class Lambertian_directional_axisymmetric_piecewise_Polychromatic(object):
 	'''
 	Generates a function that performs diffuse reflections off opaque surfaces whose spectral angular absorptance (axisymmetrical) is interpolated from discrete angular and spectral values.
 	'''
@@ -332,7 +347,7 @@ class Lambertian_directional_axisymmetric_piecewise_Polychromatic(OpticsCallable
 			parents=selector)
 		return outg
 
-class LambertianSpecular_directional_axisymmetric_piecewise(OpticsCallable):
+class LambertianSpecular_directional_axisymmetric_piecewise(object):
 	'''
 	Generates a function that performs partly specular/diffuse reflections off opaque surfaces whose angular absorptance (axisymmetrical) is interpolated from discrete angular values. Specularity is constant n the incident angles.
 	'''
@@ -362,7 +377,7 @@ class LambertianSpecular_directional_axisymmetric_piecewise(OpticsCallable):
 			parents=selector)
 		return outg
 
-class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(OpticsCallable):
+class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(object):
 	'''
 	Generates a function that performs partly specular/diffuse reflections off opaque surfaces whose angular absorptance (axisymmetrical) is interpolated from discrete angular values. Specularity varies with the incident angles.
 	'''
@@ -396,7 +411,7 @@ class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(OpticsCal
 
 perfect_mirror = Reflective(0)
 
-class RealReflective(OpticsCallable):
+class RealReflective(object):
 	'''
 	Generates a function that represents the optics of an opaque absorptive surface with specular reflections and realistic surface slope error. The surface slope error is considered equal in both x and y directions. The consequent distribution of standard deviation is described by a radial bivariate normal distribution law.
 
@@ -460,8 +475,21 @@ class RealReflective(OpticsCallable):
 
 		return outg
 
+class OneSidedRealReflective(RealReflective):
+	"""
+	Adds directionality to an optics manager that is modelled to represent the
+	optics of an opaque absorptive surface with specular reflections and realistic
+	surface slope error.
+	"""
+	def __call__(self, geometry, rays, selector):
+		outg = RealReflective.__call__(self, geometry, rays, selector)
+		energy = outg.get_energy()
+		proj = N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis = 0)
+		energy[proj > 0] = 0 # projection up - set energy to zero
+		outg.set_energy(energy) #substitute previous step into ray energy array
+		return outg
 
-class SemiLambertian(OpticsCallable):
+class SemiLambertian(object):
 	"""
 	Represents the optics of an semi-diffuse surface, i.e. one that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
 	"""
@@ -501,7 +529,7 @@ class SemiLambertian(OpticsCallable):
 			outg._spectra[~glancing] *= (1.-self._abs)
 		return outg
 
-class Lambertian(OpticsCallable):
+class Lambertian(object):
 	"""
 	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
 	that reflects rays in a random direction (uniform distribution of
@@ -534,7 +562,7 @@ class Lambertian(OpticsCallable):
 
 		return outg
 
-class LambertianSpecular(OpticsCallable):
+class LambertianSpecular(object):
 	"""
 	Represents the optics of surface with mixed specular and diffuse characteristics. Specularity is the ratio of incident rays that are specularly reflected to the total number of rays incident on the surface.
 	"""
@@ -569,7 +597,7 @@ class LambertianSpecular(OpticsCallable):
 		return outg
         
 
-class LambertianSpecular_IAM(OpticsCallable):
+class LambertianSpecular_IAM(object):
 	"""
 	Represents the optics of surface with mixed specular and diffuse characteristics. Specularity is the ratio of incident rays that are specularly reflected to the total number of rays incident on the surface.
 	"""
@@ -610,12 +638,12 @@ class LambertianSpecular_IAM(OpticsCallable):
          
 		return outg
 
-
-class BDRF_Cook_Torrance_isotropic(OpticsCallable):
+"""
+class BDRF_Cook_Torrance_isotropic(object):
 	'''
-	Implements the Cook Torrance BDRF model using linear interpolationsand isotropic assumption
-	Directional absorptance is found by integration of the bdrf
-	Reflected direction by sampling of the normalised interpolated bdrf.
+	# Implements the Cook Torrance BDRF model using linear interpolationsand isotropic assumption
+	#Directional absorptance is found by integration of the bdrf
+	# Reflected direction by sampling of the normalised interpolated bdrf.
 	'''
 	def __init__(self, m, alpha, R_Lam, angular_res_deg=5., axisymmetric_i=True):
 
@@ -637,6 +665,13 @@ class BDRF_Cook_Torrance_isotropic(OpticsCallable):
 		# build a linear interpolator
 		points = (thetas_i, phis_i, thetas_r, phis_r)
 		self.bdrf = BDRF_distribution(RegularGridInterpolator(points, bdrfs)) # This instance is a BDRF wilth all the necessary functions inclyuded for energy conservative sampling. /!\ Wavelength not included yet!				
+
+	def get_incident_angles(self, directions, normals):
+		vertical = N.sum(directions*normals, axis=0)*normals
+		return N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
+		
+	def project_to_normals(self, directions, normals):
+		return N.sum(rotation_to_z(normals.T) * directions.T[:,None,:], axis=2).T
 
 	def __call__(self, geometry, rays, selector):
 		# TODO: reflected direction orientation for non axisymmetric bdrf
@@ -663,7 +698,8 @@ class BDRF_Cook_Torrance_isotropic(OpticsCallable):
 
 		return outg
 	#'''
-class PeriodicBoundary(OpticsCallable):
+"""
+class PeriodicBoundary(object):
 	'''
 	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.
 	'''
@@ -695,7 +731,7 @@ class PeriodicBoundary(OpticsCallable):
 		
 		return outg
 
-class RefractiveHomogenous(OpticsCallable):
+class RefractiveHomogenous(object):
 	"""
 	Represents the optics of a surface bordering homogenous media with 
 	constant refractive index on each side. The specific index in which a
@@ -1062,7 +1098,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 				ret_bundle = reflected_rays + refracted_rays
 		return ret_bundle
 
-class FresnelConductorHomogenous(OpticsCallable):
+class FresnelConductorHomogenous(object):
 	'''
 	Fresnel equation with a conductive medium instersected. The attenuation is total in a very short range in the intersected metal and refraction is not modelled. Only strictly valid for k2 >> 1 and in situations where the refracted ray is not interacting with the scene again (eg. not traversing thin metal volumes).
 	'''
@@ -1099,243 +1135,247 @@ class FresnelConductorHomogenous(OpticsCallable):
 		
 		return reflected_rays
 
-class ScatteredAccountant(OpticsCallable):
-	'''
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy that was transmitted for each ray.
-	'''
-	def __init__(self, real_optics, *args, **kwargs):
+
+class OpticsCallable(object):
+
+	def __init__(self, optics, *args, **kwargs):
 		"""
+		Callable initialises a superclass for the optics that returns the processed bundle when called.
+		Used for composition with the accountant classes.
 		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian).
+		optics - the optics manager class to actually use with input attributes (*args, **kwargs)
 		"""
-		self._opt = real_optics(*args, **kwargs)
+		self._opt = optics(*args, **kwargs)
+
+	def __call__(self, geometry, rays, selector):
+		newb = self._opt(geometry, rays, selector)
+		return newb
+
+class Accountant(ABC):
+	def __init__(self):
+		# Initialise counter
 		self.reset()
-	
+
+	@abstractmethod
+	def reset(self):
+		# Reset counter
+		pass
+
+	@abstractmethod
+	def count(self, geometry, rays, selector, new_bundle):
+		# Accumulate data, done withing OpticsCallable __call__ method
+		pass
+
+	@abstractmethod
+	def get_data(self):
+		# Outputs counter
+		return
+
+class LocationAccountant(Accountant):
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Location'
+
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
-		self._transmitted = []
 		self._hits = []
-	
-	def __call__(self, geometry, rays, selector):
+
+	def count(self, geometry, rays, selector, new_bundle):
 		self._hits.append(geometry.get_intersection_points_global())
-		newb = self._opt(geometry, rays, selector)
-		eout = newb.get_energy()
-		self._scattered.append(eout)
-		return newb
-	
-	def get_all_hits(self):
+
+	def get_data(self):
 		"""
 		Aggregate all hits from all stages of tracing into joined arrays.
-		
+
 		Returns:
-		absorbed - the energy absorbed by each hit-point
 		hits - the corresponding global coordinates for each hit-point.
 		"""
-		if not len(self._transmitted):
-			return N.array([]), N.array([]).reshape(3,0)
-		
-		return N.hstack([a for a in self._transmitted if len(a)]), \
-			N.hstack([h for h in self._hits if h.shape[1]])
+		if not len(self._hits):
+			return N.array([]).reshape(3,0)
 
-class AbsorptionAccountant(OpticsCallable):
+		return N.hstack([h for h in self._hits if h.shape[1]])
+
+class AbsorptionAccountant(Accountant):
 	"""
 	This optics manager remembers all of the locations where rays hit it
 	in all iterations, and the energy absorbed from each ray.
 	"""
-	def __init__(self, real_optics, *args, **kwargs):
-		"""
-		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian below).
-		"""
-		self._opt = real_optics(*args, **kwargs)
-		self.reset()
-	
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Absorber'
+
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
 		self._absorbed = []
-		self._hits = []
-	
-	def __call__(self, geometry, rays, selector):
+
+	def count(self, geometry, rays, selector, new_bundle):
 		ein = rays.get_energy()[selector]
-		self._hits.append(geometry.get_intersection_points_global())
-		newb = self._opt(geometry, rays, selector)
-		eout = newb.get_energy()
-		self._absorbed.append(ein-eout)
-		return newb
-	
-	def get_all_hits(self):
+		eout = new_bundle.get_energy()
+		self._absorbed.append(ein - eout)
+
+	def get_data(self):
 		"""
 		Aggregate all hits from all stages of tracing into joined arrays.
-		
+
 		Returns:
 		absorbed - the energy absorbed by each hit-point
 		hits - the corresponding global coordinates for each hit-point.
 		"""
 		if not len(self._absorbed):
-			return N.array([]), N.array([]).reshape(3,0)
-		
-		return N.hstack([a for a in self._absorbed if len(a)]), \
-			N.hstack([h for h in self._hits if h.shape[1]])
+			return N.array([])
 
-class DirectionAccountant(AbsorptionAccountant):
+		return N.hstack([a for a in self._absorbed if len(a)])
+
+class ReceptionAccountant(Accountant):
 	"""
 	This optics manager remembers all of the locations where rays hit it
 	in all iterations, and the energy absorbed from each ray.
 	"""
-	def __init__(self, real_optics, *args, **kwargs):
-		"""
-		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian below).
-		absorptivity - to be passed to a new real_optics object.
-		"""
-		AbsorptionAccountant.__init__(self, real_optics, *args, **kwargs)
-	
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Receptor'
+
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
-		AbsorptionAccountant.reset(self)
+		self._received = []
+
+	def count(self, geometry, rays, selector, new_bundle):
+		ein = rays.get_energy()[selector]
+		self._received.append(ein)
+
+	def get_data(self):
+		"""
+		Aggregate all hits from all stages of tracing into joined arrays.
+
+		Returns:
+		absorbed - the energy absorbed by each hit-point
+		hits - the corresponding global coordinates for each hit-point.
+		"""
+		if not len(self._received):
+			return N.array([])
+
+		return N.hstack([a for a in self._received if len(a)])
+
+class ScatteringAccountant(Accountant):
+	'''
+	in all iterations, and the energy that was scattered (here understood as not absorbed) for each ray.
+	'''
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Scatterer'
+
+	def reset(self):
+		"""Clear the memory of hits (best done before a new trace)."""
+		self._scattered = []
+	
+	def count(self, geometry, rays, selector, new_bundle):
+		eout = new_bundle.get_energy()
+		self._scattered.append(eout)
+	
+	def get_data(self):
+		"""
+		Aggregate all hits from all stages of tracing into joined arrays.
+		
+		Returns:
+		_transmitted - the energy not absorbed by each hit-point
+		"""
+		if not len(self._scattered):
+			return N.array([])
+		
+		return N.hstack([a for a in self._scattered if len(a)])
+
+class DirectionAccountant(Accountant):
+	"""
+	This optics manager remembers all of the locations where rays hit it
+	in all iterations, and the energy absorbed from each ray.
+	"""
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Directional'
+
+	def reset(self):
+		"""Clear the memory of hits (best done before a new trace)."""
 		self._directions = []
 	
-	def __call__(self, geometry, rays, selector):	
+	def count(self, geometry, rays, selector, new_bundle):
 		self._directions.append(rays.get_directions()[:,selector])
-		newb = AbsorptionAccountant.__call__(self, geometry, rays, selector)
-		return newb
-	
-	def get_all_hits(self):
+
+	def get_data(self):
 		"""
 		Aggregate all hits from all stages of tracing into joined arrays.
 		
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
+		super class method results followed by:
 		directions - the corresponding unit vector directions for each hit-point.
 		"""
-		if not len(self._absorbed):
-			return N.array([]), N.array([]).reshape(3,0), N.array([]).reshape(3,0)
-		
-		return N.hstack([a for a in self._absorbed if len(a)]), \
-			N.hstack([h for h in self._hits if h.shape[1]]), \
-			N.hstack([d for d in self._directions if d.shape[1]])
 
-class SpectralDirectionAccountant(DirectionAccountant):
-	def __init__(self, real_optics, *args, **kwargs):
-		"""
-		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian below).
-		"""
-		DirectionAccountant.__init__(self, real_optics, *args,
- **kwargs)
+		if not len(self._directions):
+			return N.array([]).reshape(3,0)
+		
+		return N.hstack([d for d in self._directions if d.shape[1]])
+
+class SpectralAccountant(Accountant):
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Spectral'
 
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
-		DirectionAccountant.reset(self)
 		self._wavelengths = []
-	
-	def __call__(self, geometry, rays, selector):	
+
+	def count(self, geometry, rays, selector, new_bundle):
 		self._wavelengths.append(rays.get_wavelengths()[selector])
-		newb = DirectionAccountant.__call__(self, geometry, rays, selector)
-		return newb
-	
-	def get_all_hits(self):
+
+	def get_data(self):
 		"""
 		Aggregate all hits from all stages of tracing into joined arrays.
 		
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
-		directions - the corresponding unit vector directions for each hit-point.
 		wavelengths - wavelength of each ray.
 		"""
 		if not len(self._absorbed):
-			return N.array([]), N.array([]).reshape(4,0), N.array([]).reshape(4,0)
+			return N.array([])
 		
-		return N.hstack([a for a in self._absorbed if len(a)]), \
-			N.hstack([h for h in self._hits if h.shape[1]]), \
-			N.hstack([d for d in self._directions if d.shape[1]]),\
-			N.hstack([w for w in self._wavelengths if len(w)])
+		return N.hstack([w for w in self._wavelengths if len(w)])
 
-class PolychromaticDirectionAccountant(DirectionAccountant):
-	def __init__(self, real_optics, *args, **kwargs):
-		"""
-		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian below).
-		"""
-		DirectionAccountant.__init__(self, real_optics, *args,
- **kwargs)
+class PolychromaticAccountant(Accountant):
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Polychromatic'
 
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
-		DirectionAccountant.reset(self)
 		self._wavelengths = []
 		self._spectra = []
 	
-	def __call__(self, geometry, rays, selector):	
+	def count(self, geometry, rays, selector, new_bundle):
 		oldspectra = rays.get_spectra()[:,selector]
-		newb = DirectionAccountant.__call__(self, geometry, rays, selector)
-		self._wavelengths.append(newb.get_wavelengths())
-		self._spectra.append(oldspectra-newb.get_spectra())
-		return newb
+		self._wavelengths.append(new_bundle.get_wavelengths())
+		self._spectra.append(oldspectra-new_bundle.get_spectra())
 	
-	def get_all_hits(self):
+	def get_data(self):
 		"""
-		Aggregate all hits from all stages of tracing into joined arrays.
-		
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
-		directions - the corresponding unit vector directions for each hit-point.
 		"""
 		if not len(self._absorbed):
-			return N.array([]), N.array([]).reshape(4,0), N.array([]).reshape(4,0)
+			return N.array([]), N.array([]).reshape(2,0)
 		
-		return N.hstack([a for a in self._absorbed]), \
-			N.hstack([h for h in self._hits]), \
-			N.hstack([d for d in self._directions]), \
-			N.concatenate([w for w in self._wavelengths], axis=-1), \
+		return N.concatenate([w for w in self._wavelengths], axis=-1), \
 			N.concatenate([s for s in self._spectra], axis=-1)
 
-class NormalAccountant(AbsorptionAccountant):
+'''
+deprecated
+class NormalAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, the energy absorbed from each ray and the normals.
 	"""
-	def __init__(self, real_optics, *args, **kwargs):
-		"""
-		Arguments:
-		real_optics - the optics manager class to actually use. Expected to
-			have the _abs protected attribute, and accept absorptivity as its
-			only constructor argument (as in Reflective and
-			Lambertian below).
-		absorptivity - to be passed to a new real_optics object.
-		"""
-		AbsorptionAccountant.__init__(self, real_optics, *args, **kwargs)
-	
 	def reset(self):
 		"""Clear the memory of hits (best done before a new trace)."""
-		AbsorptionAccountant.reset(self)
 		self._normals = []
 	
-	def __call__(self, geometry, rays, selector):	
-		newb = AbsorptionAccountant.__call__(self, geometry, rays, selector)
+	def count(self, geometry, rays, selector, new_bundle):
 		self._normals.append(geometry.get_normals())
-		return newb
 	
-	def get_all_hits(self):
+	def get_data(self):
 		"""
 		Aggregate all hits from all stages of tracing into joined arrays.
 		
@@ -1345,32 +1385,12 @@ class NormalAccountant(AbsorptionAccountant):
 		directions - the corresponding unit vector directions for each hit-point.
 		"""
 		if not len(self._absorbed):
-			return N.array([]), N.array([]).reshape(3,0), N.array([]).reshape(3,0)
+			return N.array([]).reshape(3,0)
 		
-		return N.hstack([a for a in self._absorbed if len(a)]), \
-			N.hstack([h for h in self._hits if h.shape[1]]), \
-			N.hstack([n for n in self._normals if n.shape[1]])
+		return N.hstack([n for n in self._normals if n.shape[1]])
+'''
 
-class OneSidedReflective(Reflective):
-	"""
-	This optics manager behaves similarly to the ReflectiveReceiver class,
-	but adds directionality. In this way a simple one-side receiver doesn't
-	necessitate an extra surface in the back.
-	"""
-	def __call__(self, geometry, rays, selector):
-		"""
-		Rays coming from the "up" side are reflected like in a Reflective
-		instance, rays coming from the "down" side have their energy set to 0.
-		As usual, "up" is the surface's Z axis.
-		"""
-		outg = Reflective.__call__(self, geometry, rays, selector)
-		energy = outg.get_energy()
-		proj = N.sum(rays.get_directions()[:,selector] * geometry.up()[:,None], axis=0)
-		energy[proj > 0] = 0
-		outg.set_energy(energy)
-		return outg
-
-class BiFacial():
+class BiFacial(object):
 	'''
 	This optical manager separates the optical response between front side (+z in general, depending on the geometry manager) and back side properties.
 	'''
@@ -1419,37 +1439,49 @@ class BiFacial():
 		except:
 			pass
 
-class OneSidedRealReflective(RealReflective):
-	"""
-	Adds directionality to an optics manager that is modelled to represent the
-	optics of an opaque absorptive surface with specular reflections and realistic
-	surface slope error.
-	"""
-	def __call__(self, geometry, rays, selector):
-		outg = RealReflective.__call__(self, geometry, rays, selector)
-		energy = outg.get_energy()
-		proj = N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis = 0)
-		energy[proj > 0] = 0 # projection up - set energy to zero
-		outg.set_energy(energy) #substitute previous step into ray energy array
-		return outg
-
-# This stuff automatically generates the Receiver, Detector and Orientor classes from optical callables using the relevant Accountants.
+# This stuff automatically generates the classes from optical callables using the relevant Accountants.
+'''
 def subclass_from_name(name, parent, optics_class):
 	class NewClass(parent):
-		optics_class = optics_class
+		optics_class = optics_class # this is weird but it works!
 		def __init__(self, *args, **kwargs):
 			parent.__init__(self, self.optics_class, *args, **kwargs)
 	accountant_with_name(name, NewClass, parent)
-	
-def accountant_with_name(name, class_template, parent):
+'''
+
+def accountant_with_name(name, class_template):
 	classdict = {}
 	for e in class_template.__dict__.items():
 		classdict.update({e[0]:e[1]})
-	globals()[name] = type(name, (parent,), classdict)
+	globals()[name] = type(name, (OpticsCallable,), classdict)
 
+def make_mixed_accountant_class(name, accountants, optics_class):
+	class NewClass(OpticsCallable):
+		optics_class = optics_class # this is very weird but it works! If we do not do this, we cannot pass the optics_class argument as a class name.
+		def __init__(self, *args, **kwargs):
+			OpticsCallable.__init__(self, self.optics_class, *args, **kwargs)
+			self.accountants = accountants
+
+		def __call__(self, geometry, rays, selector):
+			new_bundle = super().__call__(geometry, rays, selector)
+			for a in self.accountants:
+				a.count(geometry, rays, selector, new_bundle)
+			return new_bundle
+
+		def reset(self):
+			for a in self.accountants:
+				a.reset()
+
+		def get_all_hits(self):
+			output = []
+			for a in accountants:
+				output.append(a.get_data())
+			return output
+	accountant_with_name(name, NewClass)
+'''
 def make_spectral_accountant_class(name, parent):
 	class SpectralAccountant(parent):
-		def __init__(self, accountant):
+		def __init__(self):
 			parent.__init__(self)
 
 		def reset(self):
@@ -1462,25 +1494,20 @@ def make_spectral_accountant_class(name, parent):
 			newb = parent.__call__(self, geometry, rays, selector)
 			return newb
 			
-		def get_all_hits(self):
+		def get_data(self):
 			"""
 			Aggregate all hits from all stages of tracing into joined arrays.
 			
 			Returns:
-			absorbed - the energy absorbed by each hit-point
-			hits - the corresponding global coordinates for each hit-point.
-			directions - the corresponding unit vector directions for each hit-point.
-			wavelengths - wavelength of each ray.
+
 			"""
 			if not len(self._absorbed):
-				return N.array([]), N.array([]).reshape(4,0), N.array([]).reshape(4,0)
+				return N.array([])
 			
-			return N.hstack([a for a in self._absorbed if len(a)]), \
-				N.hstack([h for h in self._hits if h.shape[1]]), \
-				N.hstack([d for d in self._directions if d.shape[1]]),\
-					
+			return N.hstack([w for w in self._wavelengths if len(w)])
+
 	accountant_with_name(name, SpectralAccountant, parent)
-	
+
 def make_polychromatic_accountant_class(name, parent):
 	class PolychromaticAccountant(parent):
 		def __init__(self, accountant):
@@ -1499,7 +1526,7 @@ def make_polychromatic_accountant_class(name, parent):
 			self._spectra.append(oldspectra-newb.get_spectra())
 			return newb
 			
-		def get_all_hits(self):
+		def get_data(self):
 			"""
 			Aggregate all hits from all stages of tracing into joined arrays.
 			
@@ -1520,35 +1547,48 @@ def make_polychromatic_accountant_class(name, parent):
 				N.concatenate([s for s in self._spectra], axis=-1)
 				
 	accountant_with_name(name, PolychromaticAccountant, parent)
+	'''
+def make_accountant_classes(optical_class):
+	for accs in mixed_accountants:
+		names = [a().shorthand for a in accs]
+		accountant_name = ''.join(names[::-1])
+		newclass = optical_class.__name__ + accountant_name
+		make_mixed_accountant_class(newclass, accs, optical_class)
+		if accountant_name in aliases.keys():
+			newclass = optical_class.__name__ + aliases[accountant_name]
+			make_mixed_accountant_class(newclass, accs, optical_class)
 
-def make_accountant_classes(name, optical_class):
+# Make all accountant combinations to then use in making the optics callable classes with accountant composition
+# Naming conventions: Start directional then location, then spectral and finish with energy accountants
+# Eg.: DirectionalSpectralAbsorber
+# opposite order of the output because it reads better when declaring
+accountants_raw = Accountant.__subclasses__()
+accountants = []
+# TODO: decide this, split spectral and polychromatic, associate polychrimatic with energy processing and change order decided so far.
+# Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
+# Within each category, do alphabetical
+accountant_types = ['Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction']
+for at in accountant_types:
+	accountants.extend([a for a in accountants_raw if at in a.__name__])
+# Aliases to make declaration easier for common accounatnts and ensure backward compatibility
+aliases = {'LocationAbsorber':'Receiver', 'DirectionalLocationAbsorber':'Detector', 'LocationScatterer':'Transmitter'}
+mixed_accountants = []
+for i in range(1, len(accountants)):
+	mix = (list(tup) for tup in combinations(accountants, i))
+	# Polychromatic and spectral should be mutually exclusive
+	for acc in mix:
+		names = [a.__name__ for a in acc]
+		if ('SpectralAccountant' in names) and ('PolychromaticAccountant' in names):
+			continue
+		mixed_accountants.append(acc)
 
-	# dictionary of keywords and associate accountants
-	accountants_dict = {'Receiver':AbsorptionAccountant, 'Detector':DirectionAccountant, 'Orientor':NormalAccountant, 'Transmitter':ScatteringAccountant}
-	
-	# Make all combinations of accountants and spectral accountants for the optical_class given.
-	for i in accountants_dict.items():
-		newclass = name+i[0]
-		subclass_from_name(newclass, i[1], optical_class)
-		spectral_newclass = 'Spectral'+newclass
-		parent_accountant = eval(newclass	)
-		make_spectral_accountant_class(spectral_newclass, parent_accountant)
-		polychromatic_newclass = 'Polychromatic'+newclass
-		make_spectral_accountant_class(polychromatic_newclass, parent_accountant)
-	return None	
-
+# The following lines run the accountant making stuff upon loading the module.
 not_optics = ['Accountant', 'BiFacial'] # to exclude these classes from the factory
-names = inspect.getmembers(sys.modules[__name__])
+# Find all classes from this module that are optics
+names = inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__ and member.__name__ not in not_optics)
+# Make all accountants combinations for each optics class
 for name, obj in names:
-	valid = False
-	if inspect.isclass(obj):
-		valid = True
-		for n in not_optics:
-			if n in name:
-				valid = False
-				
-	if valid:
-		optics_class = locals()[name]
-		new_classes = make_accountant_classes(name, optics_class)
+	optics_class = locals()[name]
+	make_accountant_classes(optics_class)
 
 # vim: ts=4
