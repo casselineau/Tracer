@@ -1,6 +1,6 @@
 import numpy as N
 
-def export_hist_data_csv(hist, bins, saveloc, info_header, separator=','):
+def save_hist_data_csv(hist, bins, hist_label, bins_label, info_header, saveloc, separator=','):
     '''
     Exports a fluxmap in .csv format
     :param hist:
@@ -18,37 +18,55 @@ def export_hist_data_csv(hist, bins, saveloc, info_header, separator=','):
     with open(saveloc, 'w') as fo:
         fo.write(info_header)
         fo.write('\n')
-        fo.write('bins_x' + separator)
+        if dims == 2:
+            fo.write('bins_x:'+separator+bins_label[0])
+        else:
+            fo.write('bins_x:'+separator+bins_label)
+        fo.write('\n')
         for e in bins_x:
             fo.write(str(e) + separator)
         fo.write('\n')
         if dims == 2: # if it is a 2 D histogram
-            fo.write('bins_y' + separator)
+            fo.write('bins_y:'+separator+bins_label[1])
+            fo.write('\n')
             for e in bins_y:
                 fo.write(str(e) + separator)
             fo.write('\n')
+            fo.write('data:'+separator+hist_label)
+            fo.write('\n')
             for l in range(hist.shape[0]):
                 for f in hist[l]:
-                    fo.write(str(f) + ',')
+                    fo.write(str(f) + separator)
                 fo.write('\n')
         else:
+            fo.write('data:'+separator+hist_label)
+            fo.write('\n')
             for f in hist:
-                fo.write(str(f) + ',')
+                fo.write(str(f) + separator)
 
-def load_hist_data_csv(fluxmap_file):
+def load_hist_data_csv(fluxmap_file, separator=','):
     with open(fluxmap_file, 'r') as fo:
         data = fo.readlines()
 
     print('Data information:\n', data[0]) # Info header
 
     bins = []
-    for b in data[1:]:
+    bins_label = []
+    load_data = []
+    for i, b in enumerate(data[1:]):
         if 'bins_' in b:
-            bins.append(N.array(b.split(',')[1:-1], dtype=float))
+            bins_label.append(b.split(separator)[-1])
+            bins.append(N.array(data[i+2].split(separator)[:-1], dtype=float))
+        if 'data' in b:
+            data_label = b.split(separator)[-1]
+            if len(bins) == 1:
+                load_data = N.array(data[i+2].split(separator)[:-1], dtype=float)
+            if len(bins) == 2:
+                for j in range(len(bins[0])-1):
+                    load_data.append([d for d in N.array(data[i+2+j].split(separator)[:-1], dtype=float)])
     if len(bins) == 1:
-        load_data = N.array(data[2].split(',')[:-1], dtype=float)
-    if len(bins) == 2:
-        load_data = N.zeros((len(bins[0])-1, len(bins[1])-1))
-        for d in range(load_data.shape[0]):
-            load_data[d] = N.array(data[3 + d].split(',')[:-1], dtype=float)
-    return bins, load_data
+        bins = bins[0]
+        bins_label = bins_label[0]
+    else:
+        load_data = N.array(load_data)
+    return bins, load_data, bins_label, data_label

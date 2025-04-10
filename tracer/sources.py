@@ -21,12 +21,7 @@ import numpy as N
 from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
 from ray_trace_utils.vector_manipulations import rotate_z_to_normal
-
-def Planck(wl, T):
-	h = 6.626070040e-34 # Planck constant
-	c = 299792458. # Speed of light in vacuum
-	k = 1.38064852e-23 # Boltzmann constant
-	return (2.*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
+from ray_trace_utils.electromagnetics import Planck
 
 def single_ray_source(position, direction, flux=None):
 	'''
@@ -674,7 +669,7 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 
 	Arguments:
 	num_rays - number of rays to generate.
-	center - a column 3-array with the 3D coordinate of the center of one of the bases.
+	center - a column 3-array with the 3D coordinate of the mid heigh on the central axis..
 	rc - The radius of the cylinder.
 	lc - the length of the cylinder.
 	direction - the direction of outgoing rays as projected on the cylinder axis. 
@@ -689,7 +684,7 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 	lc = float(lc)
 	num_rays = int(num_rays)
 
-	zs = lc*random.uniform(size=num_rays)
+	zs = lc*random.uniform(size=num_rays)-lc/2.
 
 	phi_s = random.uniform(low=angular_span[0], high=angular_span[1], size=num_rays)
 
@@ -723,7 +718,7 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 
 	return rayb
 
-def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, area, thetas, band_emittance, T, nrays, band):
+def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, area, thetas, band_emittance, T, nrays, band, ref_index):
 	'''
 	Returns a RayBundle instance describing a thermal emitter with given directional emissivities in a given spectral band.
 
@@ -733,7 +728,7 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	thetas 	 	angles at which emittances are given
 	band_emittance 	if a number, the band hemispherical emittance,
 					if a 1D array of the length of thetas, the directional band emittances
-	T  			Temperature of the emitter
+	T  			Temperature of the emitter in K
 	nrays 		Number of rays to trace
 	band		A list of 2 values delimiting the spectral band
 	'''
@@ -741,19 +736,24 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	# Build axisymmetrical emissions profile
 	# Integrate the emittance
 	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
-	bb_spectral_radiance_in_band = N.trapezoid(Planck(wls, T), wls)
+	bb_spectral_radiance = Planck(wls, T)
+	bb_spectral_radiance_in_band = N.trapezoid(bb_spectral_radiance, wls)
+	bb_spectral_radiance_wl = (bb_spectral_radiance[1:] + bb_spectral_radiance[:-1]) / 2. * (wls[1:] - wls[:-1])
+	mid_wls = (wls[1:] + wls[:-1]) / 2.
+	wl_avg = N.sum(mid_wls * bb_spectral_radiance_wl) / bb_spectral_radiance_in_band
 	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
+
 	# Sample the emmissions profile distribution to get directions and energy
 	thetas_rays, weights = PW_lincossin_distribution(thetas, source_spectral_radiance).sample(nrays)
-	source_exitance = N.trapezoid(source_spectral_radiance*N.cos(thetas), thetas)
+	source_exitance = N.trapezoid(source_spectral_radiance*N.cos(thetas)*N.sin(thetas), thetas)*2.*N.pi
 	phis_rays = N.random.uniform(size=nrays)*2.*N.pi
 	directions = N.array([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
 	# Rotate to make z the normals
-	for i,d in enumerate(directions.T):
-		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
+	directions = rotate_z_to_normal(directions, normals)
+	# for i,d in enumerate(directions.T):
+	#	directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)
 	energy = weights/N.sum(weights)*source_exitance*area
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
-	rayb.set_ref_index(N.ones(nrays))
-	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
 	rayb._create_property('wavelengths', N.ones(nrays)*wl_avg)
+	rayb._create_property('ref_index', N.ones(nrays)*ref_index)
 	return rayb

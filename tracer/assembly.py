@@ -146,7 +146,8 @@ class Assembly(HasFrame):
 			
 	def reset_all_optics(self):
 		for s in self.get_surfaces():
-			s.get_optics_manager().reset()
+			if hasattr(s.get_optics_manager(), 'reset'):
+				s.get_optics_manager().reset()
 
 	def get_scene_graph(self,resolution, fluxmap, trans, vmin, vmax, bounding_boxes):
 		from pivy import coin

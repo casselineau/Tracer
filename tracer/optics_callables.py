@@ -1314,6 +1314,35 @@ class DirectionAccountant(Accountant):
 		
 		return N.hstack([d for d in self._directions if d.shape[1]])
 
+
+class NormalAccountant(Accountant):
+	"""
+	This optics manager remembers all of the locations where rays hit it
+	in all iterations, and the energy absorbed from each ray.
+	"""
+
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Normal'
+
+	def reset(self):
+		"""Clear the memory of hits (best done before a new trace)."""
+		self._normals = []
+
+	def count(self, geometry, rays, selector, new_bundle):
+		self._normals.append(geometry.get_normals())
+
+	def get_data(self):
+		"""
+		Aggregate all hits from all stages of tracing into joined arrays.
+		Returns:
+		and array collating the normal unit vector directions for each hit-point.
+		"""
+		if not len(self._normals):
+			return N.array([]).reshape(3, 0)
+
+		return N.hstack([d for d in self._normals if d.shape[1]])
+
 class SpectralAccountant(Accountant):
 	def __init__(self):
 		super().__init__()
@@ -1460,10 +1489,10 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 		optics_class = optics_class # this is very weird but it works! If we do not do this, we cannot pass the optics_class argument as a class name.
 		def __init__(self, *args, **kwargs):
 			OpticsCallable.__init__(self, self.optics_class, *args, **kwargs)
-			self.accountants = accountants
+			self.accountants = [a() for a in accountants]
 
 		def __call__(self, geometry, rays, selector):
-			new_bundle = super().__call__(geometry, rays, selector)
+			new_bundle = OpticsCallable.__call__(self, geometry, rays, selector)
 			for a in self.accountants:
 				a.count(geometry, rays, selector, new_bundle)
 			return new_bundle
@@ -1474,7 +1503,7 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 
 		def get_all_hits(self):
 			output = []
-			for a in accountants:
+			for a in self.accountants:
 				output.append(a.get_data())
 			return output
 	accountant_with_name(name, NewClass)
@@ -1554,9 +1583,10 @@ def make_accountant_classes(optical_class):
 		accountant_name = ''.join(names[::-1])
 		newclass = optical_class.__name__ + accountant_name
 		make_mixed_accountant_class(newclass, accs, optical_class)
-		if accountant_name in aliases.keys():
-			newclass = optical_class.__name__ + aliases[accountant_name]
-			make_mixed_accountant_class(newclass, accs, optical_class)
+		alias_check = [k for k in aliases.keys() if k in accountant_name]
+		for k in alias_check:
+			newclass_alias = newclass.replace(k, aliases[k])
+			make_mixed_accountant_class(newclass_alias, accs, optical_class)
 
 # Make all accountant combinations to then use in making the optics callable classes with accountant composition
 # Naming conventions: Start directional then location, then spectral and finish with energy accountants
@@ -1567,10 +1597,11 @@ accountants = []
 # TODO: decide this, split spectral and polychromatic, associate polychrimatic with energy processing and change order decided so far.
 # Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
 # Within each category, do alphabetical
-accountant_types = ['Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction']
+accountant_types = ['Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
 for at in accountant_types:
 	accountants.extend([a for a in accountants_raw if at in a.__name__])
-# Aliases to make declaration easier for common accounatnts and ensure backward compatibility
+# Aliases to make declaration easier for common accountants and ensure backward compatibility
+# TODO: DEal with repeats in aliases and output order
 aliases = {'LocationAbsorber':'Receiver', 'DirectionalLocationAbsorber':'Detector', 'LocationScatterer':'Transmitter'}
 mixed_accountants = []
 for i in range(1, len(accountants)):
@@ -1585,7 +1616,7 @@ for i in range(1, len(accountants)):
 # The following lines run the accountant making stuff upon loading the module.
 not_optics = ['Accountant', 'BiFacial'] # to exclude these classes from the factory
 # Find all classes from this module that are optics
-names = inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__ and member.__name__ not in not_optics)
+names = inspect.getmembers(sys.modules[__name__], lambda member: inspect.isclass(member) and member.__module__ == __name__ and not any(no in member.__name__ for no in not_optics))
 # Make all accountants combinations for each optics class
 for name, obj in names:
 	optics_class = locals()[name]

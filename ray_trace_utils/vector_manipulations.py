@@ -7,7 +7,6 @@ def get_angles(v1, v2, signed=False):
 	v1 - (3,n)
 	v2 - (3,n)
 	'''
-	v2 = v2[:,0]
 	if len(v2.shape)<=1:
 		if len(v1.shape)<=1:
 			return get_angle(v1, v2, signed)
@@ -62,10 +61,14 @@ def rotate_z_to_normal(vecs, normals):
 	zs[2] = 1.
 	axes, angles = axes_and_angles_between(zs, normals)
 	# rotate +z to normals
+	rots = []
 	for i, d in enumerate(vecs.T):
 		if angles[i] != 0.:
-			rot = general_axis_rotation(axes[:,i], angles[i])
-			vecs[:,i] = N.dot(rot, d)
+			rots.append(general_axis_rotation(axes[:,i], angles[i]))
+		else:
+			rots.append(N.eye(3))
+
+	vecs = N.einsum('nij, jn->in', rots, vecs)
 
 	return vecs
 
