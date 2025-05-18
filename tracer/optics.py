@@ -10,7 +10,7 @@ import logging
 
 def fresnel(ray_dirs, normals, n1, n2):
 	"""Determines what ratio of the ray bundle is reflected and what is refracted, 
-	and the performs the appropriate functions on them. Based on fresnel's euqations, [1]
+	and the performs the appropriate functions on them. Based on fresnel's equations, [1]
 	
 	Arguments: 
 	ray_dirs - the directions of the ray bundle
@@ -126,6 +126,9 @@ def generalised_fresnel(ray_dirs, normals, lambdas, material1, material2):
 	https://www-sciencedirect-com.virtual.anu.edu.au/science/article/pii/S002240730500066X
 	INCOMPLETE
 	'''
+
+	# if k/n <0.07: standard Fresnel
+	# otherwise more
 	logging.error("WIP")
 	stop
 	m1, m2 = material1.m(lambdas), material2.m(lambdas)
@@ -133,7 +136,7 @@ def generalised_fresnel(ray_dirs, normals, lambdas, material1, material2):
 	N2, K2 = apparent_NK(m2, alpha2)
 
 	theta_in = N.arccos(N.abs((normals*ray_dirs).sum(axis=0)))
-	R_p, R_s, theta2 = Generalised_Fresnel(m, m2, theta1)
+	#R_p, R_s, theta2 = fresnel(m1, m2, theta_in)
 	return R_p, R_s, theta2
 	
 			   
@@ -220,8 +223,8 @@ def scattering(sigma, intersection_path_lengths):
 	scattered = scattered_path_lengths < intersection_path_lengths
 	return scattered, scattered_path_lengths
 
-def R_from_n_k(n1, n2, res=100):
-	thetas_in = N.vstack(N.linspace(0., N.pi/2., res))
+def R_from_n_k(n1, n2, thetas_in):
+	n1, n2 = N.vstack(n1), N.vstack(n2)
 	foo = N.cos(thetas_in)
 	bar = N.sqrt(1. - (n1/n2 * N.sin(thetas_in))**2)
 	Rs = ((n1*foo - n2*bar)/(n1*foo + n2*bar))**2

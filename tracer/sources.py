@@ -736,12 +736,12 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	# Build axisymmetrical emissions profile
 	# Integrate the emittance
 	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
-	bb_spectral_radiance = Planck(wls, T)
-	bb_spectral_radiance_in_band = N.trapezoid(bb_spectral_radiance, wls)
-	bb_spectral_radiance_wl = (bb_spectral_radiance[1:] + bb_spectral_radiance[:-1]) / 2. * (wls[1:] - wls[:-1])
+	bb_spectral_radiance_in_band = Planck(wls, T)
+	bb_spectral_radiance_in_band_integrated = N.trapezoid(bb_spectral_radiance_in_band, wls)
+	bb_spectral_radiance_in_band_mid_wl = (bb_spectral_radiance_in_band[1:] + bb_spectral_radiance_in_band[:-1]) / 2. * (wls[1:] - wls[:-1])
 	mid_wls = (wls[1:] + wls[:-1]) / 2.
-	wl_avg = N.sum(mid_wls * bb_spectral_radiance_wl) / bb_spectral_radiance_in_band
-	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
+	wl_avg = N.sum(mid_wls * bb_spectral_radiance_in_band_mid_wl) / bb_spectral_radiance_in_band_integrated
+	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band_integrated
 
 	# Sample the emmissions profile distribution to get directions and energy
 	thetas_rays, weights = PW_lincossin_distribution(thetas, source_spectral_radiance).sample(nrays)

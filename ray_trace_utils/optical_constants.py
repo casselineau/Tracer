@@ -1,13 +1,15 @@
 import numpy as N
 from ray_trace_utils.electromagnetics import Drude_Lorentz_model, dielectric_to_refractive
 from scipy.interpolate import interp1d
+from os import walk
 
 Sopra_data_loc = '/'.join(__file__.split('/')[:-1])+'/Sopra_Data'
+other_materials_loc = '/'.join(__file__.split('/')[:-1])+'/other_material_data'
 
 def get_from_Sopra(material):
 	'''
 	Automatically creates an optical_material subclass with the name given in material (a string) and the properties of this material in the Sopra database, then returns a classe instance of this material.
-	The matwerial string argument is not case sensitve.
+	The material string argument is not case sensitive.
 	
 	'''
 	class Newmat(optical_material):
@@ -49,7 +51,10 @@ class optical_material(object):
 				print ("Wavelength outside of data or model range of validity")
 				print (self.l_min, self.l_max)
 				print (l_low, l_high)
-				return N.nan
+				valid = N.logical_and(lambdas>=self.l_min, lambdas<=self.l_max)
+				data = N.ones(len(lambdas))*N.nan
+				data[valid] = prop(self, lambdas[valid])
+				return data
 			return prop(self, lambdas)
 		return wrapper_check_valid
 
@@ -72,10 +77,52 @@ class optical_material(object):
 				self.l_min, self.l_max = N.amin(lambdas), N.amax(lambdas)
 				self.m = interp1d(lambdas, m)
 				init(self)
+				'''
+				# Not tested yet
+				if source == 'Other_materials':
+					filenames = next(walk(other_materials_loc), (None, None, []))[2]  # [] if no file
+					filenames = filenames[self.__class__.__name__.upper() in f for f in filenames]
+					lambdas_list, m_list = [], []
+					for f in filenames:
+						data = N.loadtxt(other_materials_loc+'/'+f, skiprows=1, delimiter=',')
+						lambdas_list.append(data[:,0])
+						m_list.append = data[:,1] + 1j*data[:,2]
+					lambdas = 				
+					self.l_min, self.l_max = N.amin(lambdas), N.amax(lambdas)
+					self.m = interp1d(lambdas, m)
+					init(self)
+				'''
 			else:
 				return init(self)
 		return wrapper_source_check
-				
+
+class Al2O3(optical_material):
+
+	def __init__(self):
+		data = N.loadtxt(other_materials_loc+'/Al2O3_Querry-o.csv', skiprows=1, delimiter=',')
+		lambdas, m = data[:,0], data[:,1] + 1j*data[:,2]
+		l_min, l_max = N.amin(lambdas), N.amax(lambdas)
+		self.m_func = interp1d(lambdas, m)
+		optical_material.__init__(self, l_min, l_max)
+
+	@optical_material.check_valid
+	def m(self, lambdas):
+		'''
+		Optical constants used by the optical manager in tracer
+		'''
+		return self.m_func(lambdas)
+
+class Air(optical_material):
+
+	def __init__(self):
+		# simplified air/vaccum placeholder returning 1.
+		optical_material.__init__(self, 200e-9, 10e-6)
+
+	def m(self, lambdas):
+		'''
+		Optical constants used by the optical manager in tracer
+		'''
+		return 1.
 		
 class SiO2(optical_material):
 
@@ -153,7 +200,6 @@ class Ti(optical_material):
 
 class Rh(optical_material):
 
-
 	@optical_material.source_check
 	def __init__(self):
 		data = N.loadtxt('/media/ael/Flashy/backup_05-06-2021/Documents/Boulot/Material_properties/Rhodium.csv', skiprows=1)
@@ -168,21 +214,47 @@ class Rh(optical_material):
 		'''
 		Optical constants used by the optical manager in tracer
 		'''
-		# https://refractiveindex.info/?shelf=main&book=Rh&page=Weaver
 		return self.m_func(lambdas)
 
 class Ta(optical_material):
 	'''
-	We use the decorator to declare data from Sopra database directly. Requires the instance to be created with source='Sopra' argument.
+	Mixed sources to cover a large spectrum. data from refractiveindex.com
+	Until 2.48 um: W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals. J. Phys Chem Ref. Data 38, 1013-1092 (2009)
+	Then: M. A. Ordal, R. J. Bell, R. W. Alexander, L. A. Newquist, M. R. Querry. Optical properties of Al, Fe, Ti, Ta, W, and Mo at submillimeter wavelengths. Appl. Opt. 27, 1203-1209 (1988)
 	'''
-	@optical_material.source_check
 	def __init__(self):
-		optical_material.__init__(self, self.l_min, self.l_max)
+		data = N.loadtxt(other_materials_loc+'/Ta.csv', skiprows=1, delimiter=',')
+		lambdas, m = data[:,0], data[:,1] + 1j*data[:,2]
+		l_min, l_max = N.amin(lambdas), N.amax(lambdas)
+		self.m_func = interp1d(lambdas, m)
+		optical_material.__init__(self, l_min, l_max)
 
 	@optical_material.check_valid
-	@optical_material.check_m_source
 	def m(self, lambdas):
-		pass
+		'''
+		Optical constants used by the optical manager in tracer
+		'''
+		return self.m_func(lambdas)
+
+class W(optical_material):
+	'''
+	Mixed sources to cover a large spectrum. data from refractiveindex.com
+	Until 2.48 um: W. S. M. Werner, K. Glantschnig, C. Ambrosch-Draxl. Optical constants and inelastic electron-scattering data for 17 elemental metals. J. Phys Chem Ref. Data 38, 1013-1092 (2009)
+	Then: M. A. Ordal, R. J. Bell, R. W. Alexander, L. A. Newquist, M. R. Querry. Optical properties of Al, Fe, Ti, Ta, W, and Mo at submillimeter wavelengths. Appl. Opt. 27, 1203-1209 (1988)
+	'''
+	def __init__(self):
+		data = N.loadtxt(other_materials_loc+'/W.csv', skiprows=1, delimiter=',')
+		lambdas, m = data[:,0], data[:,1] + 1j*data[:,2]
+		l_min, l_max = N.amin(lambdas), N.amax(lambdas)
+		self.m_func = interp1d(lambdas, m)
+		optical_material.__init__(self, l_min, l_max)
+
+	@optical_material.check_valid
+	def m(self, lambdas):
+		'''
+		Optical constants used by the optical manager in tracer
+		'''
+		return self.m_func(lambdas)
 
 if __name__ == '__main__':
 	from sys import path
