@@ -222,19 +222,19 @@ class KdTree(object):
 
 		bounds = N.array([self.minpoint, self.maxpoint])
 		inters, t_mins, t_maxs = self.intersect_bounds(poss, dirs, inv_dirs, bounds)
+		any_inter = False
+		if lightweight:
+			#surfaces_relevancy = [[self.always_relevant] for _ in range(nrays)]
+			surfaces_relevancy = [[[]] for _ in range(self.n_surfs)]
+			ray_orders = N.zeros(nrays, dtype=int)
+			for s in self.always_relevant:
+				surfaces_relevancy[s] += [r for r in range(nrays)]
+		else:
+			surfaces_relevancy = N.zeros((self.n_surfs, nrays), dtype=bool)
+			surfaces_relevancy[self.always_relevant] = True
 
 		if inters.any():
 			n_inters = len(inters)
-			any_inter = False
-			if lightweight:
-				#surfaces_relevancy = [[self.always_relevant] for _ in range(nrays)]
-				surfaces_relevancy = [[[]] for _ in range(self.n_surfs)]
-				ray_orders = N.zeros(nrays, dtype=int)
-				for s in self.always_relevant:
-					surface_relevancy[s] += [r for r in range(nrays)]
-			else:
-				surfaces_relevancy = N.zeros((self.n_surfs, nrays), dtype=bool)
-				surfaces_relevancy[self.always_relevant] = True
 			# for rays that do intersect, go down the tree (or up?):
 			for r in range(n_inters):
 				if inters[r] == False:

@@ -112,13 +112,41 @@ class Al2O3(optical_material):
 		'''
 		return self.m_func(lambdas)
 
+
+class OpticalMaterialFromFile(optical_material):
+	def __init__(self, filename, wavelength_col=0, n_col=1, k_col=2, wavelength_unit='nm'):
+		data = N.loadtxt(filename, skiprows=1, delimiter=',', usecols=(wavelength_col, n_col, k_col))
+
+		unit_factor = 1
+		if wavelength_unit == 'nm':
+			unit_factor = 1e-9
+		elif wavelength_unit == 'um':
+			unit_factor = 1e-6
+		elif wavelength_unit == 'm':
+			unit_factor = 1
+		else:
+			raise ValueError("Invalid wavelength unit. Use 'nm', 'um', or 'm'.")
+
+		lambdas, m = data[:,0]*unit_factor, data[:,1] + 1j*data[:,2]
+		l_min, l_max = N.amin(lambdas), N.amax(lambdas)
+		self.m_func = interp1d(lambdas, m)
+		optical_material.__init__(self, l_min, l_max)
+
+	@optical_material.check_valid
+	def m(self, lambdas):
+		'''
+		Optical constants used by the optical manager in tracer
+		'''
+		return self.m_func(lambdas)
+
+
 class Air(optical_material):
 
 	def __init__(self):
 		# simplified air/vaccum placeholder returning 1.
 		optical_material.__init__(self, 200e-9, 10e-6)
 
-	def m(self, lambdas):
+	def m(self, lambdas=None):
 		'''
 		Optical constants used by the optical manager in tracer
 		'''
