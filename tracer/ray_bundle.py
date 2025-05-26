@@ -112,7 +112,7 @@ class RayBundle:
 		Returns the number of rays in the bundle. Assumes that the mandatory
 		attributes were set (vertices, directions).
 		"""
-		return self._vertices.shape[1]
+		return self.get_vertices().shape[1]
 	
 	def inherit(self, selector=N.s_[:], vertices=None, direction=None, energy=None,
 		parents=None, ref_index=None, **kwds):
@@ -175,7 +175,7 @@ class RayBundle:
 		empty.set_directions(empty_array)
 		empty.set_vertices(empty_array)
 		empty.set_energy(N.array([]))
-		empty.set_parents(N.array([]))
+		empty.set_parents(N.array([], dtype=int))
 		empty.set_ref_index(N.array([]))
 		return empty
 

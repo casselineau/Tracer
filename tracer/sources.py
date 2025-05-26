@@ -9,7 +9,7 @@ References:
 
 TODO:
 Systematize source declarations:
-- ray vertices from surface/volume sampling -> could be obtains in the reay_trace_utils.sampling module or, potentally, adding sampling functions to the geometry managers.
+- ray vertices from surface/volume sampling -> could be obtains in the ray_trace_utils.sampling module or, potentally, adding sampling functions to the geometry managers.
 - ray directions directions from normalised directional radiance distributions -> using sampling functions but keeping all radiance preoccupations here.
 	- For surface emissions: cosine weighted
 	- for volume emisison, no cosine weighting?
@@ -753,7 +753,7 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
 	energy = weights/N.sum(weights)*source_exitance*area
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
-	rayb.set_ref_index(N.ones(nrays))
 	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
 	rayb._create_property('wavelengths', N.ones(nrays)*wl_avg)
+	rayb._create_property('ref_index', N.ones(nrays))
 	return rayb
