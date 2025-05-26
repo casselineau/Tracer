@@ -76,7 +76,7 @@ Reference:
 		viewer = SoGuiExaminerViewer(win)
 		bgcol = coin.SbColor(.9*255,.9*255,.8*255)
 		viewer.setBackgroundColor(bgcol)
-		viewer.getGLRenderAction().setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
+		viewer.quarterwidget.sorendermanager.setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
 		viewer.setSceneGraph(self.r)
 		viewer.setTitle("Examiner Viewer")
 		viewer.show()

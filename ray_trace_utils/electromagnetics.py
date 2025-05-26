@@ -1,5 +1,18 @@
 import numpy as N
 
+def Planck(wl, T):
+	'''
+	Planck sidtribution
+	:param wl: wavelength in m
+	:param T: Temperature in K
+	:return: Planck distribution values for each wl
+	'''
+	h = 6.626070040e-34 # Planck constant
+	c = 299792458. # Speed of light in vacuum
+	k = 1.38064852e-23 # Boltzmann constant
+	hc_kTwl = h*c/(k*T*wl)
+	return (2.*h*c**2.)/(wl**5.)/(N.exp(hc_kTwl)-1.)
+
 def dielectric_to_refractive(eps):
 	'''
 	eps - complex dielectic function
@@ -101,7 +114,6 @@ def fit_Drude_Lorentz_from_m(lambdas, m, n_res, metal=False):
 	
 	return material
 	
-
 def fresnel_to_attenuating(n1, m2, theta1):
 	'''
 	From Modest Chapter 2 -  The Interface between a Perfect Dielectric and

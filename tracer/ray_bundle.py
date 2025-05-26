@@ -98,8 +98,8 @@ class RayBundle:
 			types.MethodType(setter, self)
 		
 		if init_val is not None:
-	   		self.__dict__['set_' + propname](init_val)
-	
+			self.__dict__['set_' + propname](init_val)
+
 	def has_property(self, propname):
 		"""
 		Checks whether the looked-after property ``propname`` exists for this
