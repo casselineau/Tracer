@@ -219,7 +219,7 @@ def rect_bundle(num_rays, center, direction, x, y, ang_range, flux=None, procs=1
 
 #def bivariate_rect_bundle(num_rays, center, direction, x, y, ang_range_vert, ang_range_hor, flux=None):
 
-def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1, wavelength=None):
+def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1, wavelength=None, ref_index=None):
 	a = pillbox_sunshape_directions(num_rays, ang_range)
 	# Rotate to a frame in which <direction> is Z:
 	perp_rot = rotation_to_z(rays_direction)
@@ -246,6 +246,13 @@ def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction
 		rayb.set_energy(x*y/num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
 	else:
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)
+
+	if wavelength is not None:
+		rayb._create_property('wavelengths', N.ones(num_rays)*wavelength)
+	
+	if ref_index is not None:
+		rayb._create_property('ref_index', N.ones(num_rays)*ref_index)
+
 	return rayb
 
 def edge_rays_bundle(num_rays,  center,  direction,  radius, ang_range, flux=None, radius_in=0.):
