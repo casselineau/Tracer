@@ -761,12 +761,9 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	#	directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)
 	energy = weights/N.sum(weights)*source_exitance*area
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
-<<<<<<< HEAD
+
 	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
 	rayb._create_property('wavelengths', N.ones(nrays)*wl_avg)
-	rayb._create_property('ref_index', N.ones(nrays))
-=======
-	rayb._create_property('wavelengths', N.ones(nrays)*wl_avg)
 	rayb._create_property('ref_index', N.ones(nrays)*ref_index)
->>>>>>> e7aefa278279c11136a2aefaa422a8cc642452bf
+
 	return rayb
