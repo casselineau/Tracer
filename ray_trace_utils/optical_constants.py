@@ -146,7 +146,8 @@ class Air(optical_material):
 		# simplified air/vaccum placeholder returning 1.
 		optical_material.__init__(self, 200e-9, 10e-6)
 
-	def m(self, lambdas=None):
+	@optical_material.check_valid
+	def m(self, lambdas):
 		'''
 		Optical constants used by the optical manager in tracer
 		'''

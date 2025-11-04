@@ -94,8 +94,8 @@ class Transparent(object):
 	def __call__(self, geometry, rays, selector):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			direction=rays.get_directions()[:,selector],
-			energy=rays.get_energy()[selector],
+			direction=rays.get_directions(selector),
+			energy=rays.get_energy(selector),
 			parents=selector)
 
 		return outg
@@ -118,8 +118,8 @@ class Reflective(object):
 	def __call__(self, geometry, rays, selector):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(rays.get_directions()[:,selector], geometry.get_normals()),
-			energy=rays.get_energy()[selector]*(1. - self._abs),
+			direction=optics.reflections(rays.get_directions(selector=selector), geometry.get_normals()),
+			energy=rays.get_energy(selector)*(1. - self._abs),
 			parents=selector)
 	
 		if outg.has_property('spectra'):
@@ -141,7 +141,7 @@ class OneSidedReflective(Reflective):
 		"""
 		outg = Reflective.__call__(self, geometry, rays, selector)
 		energy = outg.get_energy()
-		proj = N.sum(rays.get_directions()[:,selector] * geometry.up()[:,None], axis=0)
+		proj = N.sum(rays.get_directions(selector) * geometry.up()[:,None], axis=0)
 		energy[proj > 0] = 0
 		outg.set_energy(energy)
 		return outg
@@ -156,13 +156,13 @@ class Reflective_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(slector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			parents=selector)
 
 		if outg.has_property('spectra'):
@@ -181,13 +181,13 @@ class Reflective_mod_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy(selector)*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			parents=selector)
 
 		if outg.has_property('spectra'):
@@ -206,7 +206,7 @@ class Lambertian_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
 
@@ -216,7 +216,7 @@ class Lambertian_IAM(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			parents=selector)
 
 		if outg.has_property('spectra'):
@@ -235,7 +235,7 @@ class Lambertian_mod_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
 
@@ -245,7 +245,7 @@ class Lambertian_mod_IAM(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			parents=selector)
 
 		if outg.has_property('spectra'):
@@ -264,7 +264,7 @@ class Lambertian_directional_axisymmetric_piecewise(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 
 		thetas_in = N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
@@ -277,7 +277,7 @@ class Lambertian_directional_axisymmetric_piecewise(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1.-ang_abss),
+			energy=rays.get_energy(selector)*(1.-ang_abss),
 			parents=selector)
 
 		if outg.has_property('spectra'):
@@ -297,7 +297,7 @@ class Lambertian_directional_axisymmetric_piecewise_spectral(object):
 
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 
 		thetas_in = N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
@@ -311,7 +311,7 @@ class Lambertian_directional_axisymmetric_piecewise_spectral(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1.-ang_abss),
+			energy=rays.get_energy(selector)*(1.-ang_abss),
 			parents=selector)
 		return outg
 
@@ -327,7 +327,7 @@ class Lambertian_directional_axisymmetric_piecewise_Polychromatic(object):
 
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		wavelengths = rays.get_wavelengths()[:,selector] # wavelengths resolution of each spectrum
 		thetas_in = N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
@@ -360,7 +360,7 @@ class LambertianSpecular_directional_axisymmetric_piecewise(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		directs = N.zeros(directions.shape)
 
@@ -375,7 +375,7 @@ class LambertianSpecular_directional_axisymmetric_piecewise(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1.-ang_abss),
+			energy=rays.get_energy(selector)*(1.-ang_abss),
 			parents=selector)
 		return outg
 
@@ -390,7 +390,7 @@ class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		directs = N.zeros(directions.shape)
 
@@ -407,7 +407,7 @@ class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(object):
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=directs,
-			energy=rays.get_energy()[selector]*(1.-ang_abss),
+			energy=rays.get_energy(selector)*(1.-ang_abss),
 			parents=selector)
 		return outg
 
@@ -468,8 +468,8 @@ class RealReflective(object):
 		# shape error.
 		outg = rays.inherit(selector,
 			vertices = geometry.get_intersection_points_global(),
-			direction = optics.reflections(rays.get_directions()[:,selector], real_normals_unit),
-			energy = rays.get_energy()[selector]*(1 - self._abs),
+			direction = optics.reflections(rays.get_directions(selector), real_normals_unit),
+			energy = rays.get_energy(selector)*(1 - self._abs),
 			parents = selector)
 
 		if outg.has_property('spectra'):
@@ -486,7 +486,7 @@ class OneSidedRealReflective(RealReflective):
 	def __call__(self, geometry, rays, selector):
 		outg = RealReflective.__call__(self, geometry, rays, selector)
 		energy = outg.get_energy()
-		proj = N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis = 0)
+		proj = N.sum(rays.get_directions(selector)*geometry.up()[:,None], axis = 0)
 		energy[proj > 0] = 0 # projection up - set energy to zero
 		outg.set_energy(energy) #substitute previous step into ray energy array
 		return outg
@@ -518,7 +518,7 @@ class SemiLambertian(object):
 		directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
 		directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
 	  
-		energies = rays.get_energy()[selector]
+		energies = rays.get_energy(selector)
 		energies[~glancing] = energies[~glancing]*(1. - self._abs)
 		
 		outg = rays.inherit(selector,
@@ -555,7 +555,7 @@ class Lambertian(object):
 
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy()[selector]*(1. - self._abs),
+			energy=rays.get_energy(selector)*(1. - self._abs),
 			direction=directs, 
 			parents=selector)
 
@@ -581,7 +581,7 @@ class LambertianSpecular(object):
 			surface)
 		selector - indices into ``rays`` of the hitting rays.
 		"""
-		in_directs = rays.get_directions()[:,selector]
+		in_directs = rays.get_directions(selector)
 		normals = geometry.get_normals()
 		directs = N.zeros(in_directs.shape)
 
@@ -593,7 +593,7 @@ class LambertianSpecular(object):
 
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy()[selector]*(1. - self._abs),
+			energy=rays.get_energy(selector)*(1. - self._abs),
 			direction=directs, 
 			parents=selector)
 		return outg
@@ -617,7 +617,7 @@ class LambertianSpecular_IAM(object):
 			surface)
 		selector - indices into ``rays`` of the hitting rays.
 		"""
-		in_directs = rays.get_directions()[:,selector]
+		in_directs = rays.get_directions(selector)
 		normals = geometry.get_normals()
 		directs = N.zeros(in_directs.shape)
 		vertical = N.sum(directs*normals, axis=0)*normals
@@ -631,7 +631,7 @@ class LambertianSpecular_IAM(object):
 
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			direction=directs, 
 			parents=selector)
             
@@ -681,9 +681,9 @@ class BDRF_Cook_Torrance_isotropic(object):
 		# find Normals
 		normals = geometry.get_normals()
 		# find theta_in
-		directions = rays.get_directions()[:,selector]
+		directions = rays.get_directions(selector)
 		thetas_in = self.get_incident_angles(directions, normals)
-		energy_out = rays.get_energy()[selector]
+		energy_out = rays.get_energy(selector)
 		# sample reflected directions:
 		for i, theta_in in enumerate(thetas_in):
 			# sample a reflected direction given theta_in		
@@ -715,23 +715,27 @@ class PeriodicBoundary(object):
 	def __call__(self, geometry, rays, selector):
 		# This is done this way so that the rendering knows that there is no ray between the hit on th efirst BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
+		vertices = geometry.get_intersection_points_global()
 		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
+			vertices=vertices,
 			energy=N.zeros(len(selector)),
-			direction=rays.get_directions()[:,selector], 
+			direction=rays.get_directions(selector), 
 			parents=selector)
 		# If the bundle is polychromatic, also get and cancel the spectra
 		if rays.has_property('spectra'):
-			spectra = rays.get_spectra()[:,selector]
+			spectra = rays.get_spectra(selector)
 			outg._spectra = N.zeros(spectra.shape)
+		if rays.has_property('scat_coeff'):
+			raise 'Wrong periodic optical manager. Periodic Scattering is needed when dealing with scattering volumes'
 
 		# Create new bundle with the updated positions and all remaining properties identical:
-		outg2 = rays.inherit(selector, vertices=geometry.get_intersection_points_global()+self.period*geometry.get_normals(), parents=selector)
+		outg2 = rays.inherit(selector, vertices=vertices+self.period*geometry.get_normals(), parents=selector)
 
 		# concatenate both bundles in one outgoing one
-		outg = ray_bundle.concatenate_rays([outg, outg2])
+		outg = outg + outg2
 		
 		return outg
+
 
 class Refractive(object):
 	"""
@@ -743,7 +747,7 @@ class Refractive(object):
 		"""
 		Arguments:
 		material_1, material_2 - Material classes from the optical_constants module.
-								The ray-bundles declared nee to have a starting material associated to the rays, using the same strings.
+								The ray-bundles declared need to have a starting refractive index associated to the rays.
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
 		self._materials = (material_1, material_2)
@@ -802,23 +806,30 @@ class Refractive(object):
 			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
 			refl = N.random.uniform(size=R.shape) <= R
 			# reflected rays are TIR OR rays selected to go to reflection
-			sel_refl = selector[refl]
-			sel_refr = selector[~refl]
+			sel_refl = N.argwhere(refl).flatten()#selector[refl]
+			sel_refr = N.argwhere(~refl).flatten()#selector[~refl]
 			dirs_refr = N.zeros((3, len(selector)))
 			dirs_refr[:, refr] = out_dirs
 			dirs_refr = dirs_refr[:, ~refl]
 
-			reflected_rays = rays.inherit(sel_refl, vertices=inters[:, refl],
+			if len(sel_refl)>0:
+				reflected_rays = rays.inherit(sel_refl, vertices=inters[:, refl],
 										  direction=optics.reflections(
 											  directions[:, refl],
 											  normals[:, refl]),
 										  energy=energy[refl],
-										  parents=sel_refl)
+										  parents=selector[refl])
+			else:
+				reflected_rays = None
 
-			refracted_rays = rays.inherit(sel_refr, vertices=inters[:, ~refl],
-										  direction=dirs_refr, parents=sel_refr,
+			if len(sel_refr)>0:
+				refracted_rays = rays.inherit(sel_refr, vertices=inters[:, ~refl],
+										  direction=dirs_refr, parents=selector[~refl],
 										  energy=energy[~refl],
 										  ref_index=m2[~refl])
+			else:
+				refracted_rays = None
+
 
 		else:
 			reflected_rays = rays.inherit(selector, vertices=inters,
@@ -832,15 +843,12 @@ class Refractive(object):
 										  direction=out_dirs, parents=selector[refr],
 										  energy=energy[refr] * (1 - R[refr]),
 										  ref_index=m2[refr])
+
 		return reflected_rays,  refracted_rays
 
 	def _make_refraction_bundle(self, geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector):
 		# Compute refraction directions
 		refr, out_dirs, m2 = self._refract_dirs(normals, m1, wavelengths, directions)
-		# bypass if no refractions
-		if not refr.any():
-			return perfect_mirror(geometry, rays, selector), rays.inherit(selector=N.array([0])).delete_rays(selector=N.array([0]))
-		# Compute reflectances:
 		R = N.ones(len(wavelengths))
 		R[refr] = optics.fresnel(directions[:, refr], normals[:, refr], m1[refr], m2[refr])
 		# Make output bundle
@@ -856,8 +864,16 @@ class Refractive(object):
 		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
 		return reflected_rays + refracted_rays
 
+class Absorbant(object):
 
-class RefractiveAbsorbant(Refractive):
+	def attenuate(self, previous_bundle, new_bundle):
+		prev_inters = previous_bundle.get_vertices(new_bundle.get_parents())
+		inters = new_bundle.get_vertices()
+		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
+		energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
+		new_bundle.set_energy(energy)
+
+class RefractiveAbsorbant(Refractive, Absorbant):
 	'''
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	'''
@@ -865,13 +881,9 @@ class RefractiveAbsorbant(Refractive):
 	def __init__(self, material_1, material_2, single_ray=True, sigma=None):
 		"""
 		Arguments:
-		n1, n2 - scalars representing the homogenous refractive index on each
-			side of the surface (order doesn't matter).
-		k1, k2 - extinction coefficients in each side of the surface. a1 corresponds to n1, a2 to n2.
-		single_ray - if True, refraction or reflection is decided for each ray
-			    based on the amount of reflection coefficient and only a single
-			    ray is launched in the next bundle. Otherwise, the ray is split into
-			    two in the next bundle.
+		material_1, material_2 - Material classes from the optical_constants module.
+								The ray-bundles declared need to have a starting material associated to the rays, using the same strings.
+		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
 
@@ -882,24 +894,213 @@ class RefractiveAbsorbant(Refractive):
 		normals, inters = self._get_geom_data(geometry)
 		# get ray data:
 		directions, wavelengths, m1, energy = self._get_ray_data(rays, selector)
-		# Compute attenuation in current medium:
-		prev_inters = rays.get_vertices(selector)
+		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
+		outg = reflected_rays + refracted_rays
+		'''# Compute attenuation in current medium:
+		prev_inters = rays.get_vertices(outg.get_parents())
+		inters = outg.get_vertices()
 		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
 		energy = optics.attenuations(path_lengths=path_lengths, k=m1.imag, lambda_0=wavelengths, energy=energy)
-		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
-		return reflected_rays + refracted_rays
+		outg.set_energy(energy)'''
+		self.attenuate(rays, outg)
+		return outg
 
-class RefractiveScattering(Refractive):
+
+class Scattering(object):
+
+	def __init__(self, s_c1, s_c2, g_HG_1, g_HG_2):
+		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictats alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
+		self.phase_functions = [Henyey_Greenstein(g_HG_1), Henyey_Greenstein(g_HG_2)]
+
+	def get_media(self, current_s_c):
+		"""
+		Determines the current media teh rays are travelling through based on teh scattering coefficient alone.
+
+		Arguments:
+		current_s_c - arrays of the scattering coefficients of the materials each of the rays in a ray bundle is travelling through.
+
+		Returns:
+		An array of length(n) with the media index to use for each ray.
+		"""
+		return N.array(current_s_c != self._s_cs[0], dtype=int)
+
+	def toggle_scattering_coefficients(self, current_s_c):
+		return N.where(current_s_c == self._s_cs[0],
+					   self._s_cs[1], self._s_cs[0])
+
+	def _scatter(self, rays, selector, inters):
+		# Check for scattering
+		prev_inters = rays.get_vertices(selector)
+		intersection_path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
+		s_cs = rays.get_scat_coeff(selector)
+
+		# Determine which ray gets scattered:
+		scat, scattered_path_lengths = optics.scattering(s_cs, intersection_path_lengths)
+		return scat, scattered_path_lengths, prev_inters
+
+	def _get_scattering_directions(self, scat, media):
+
+		scat_ths, scat_phis = N.zeros(N.sum(scat)), N.zeros(N.sum(scat))
+		media0 = media==0
+		media1 = ~media0
+		n0, n1 = N.sum(media0), N.sum(media1)
+		if n0>0:
+			scat_ths[media0], scat_phis[media0] = self.phase_functions[0].sample(n0)
+		if n1>0:
+			scat_ths[media1], scat_phis[media1] = self.phase_functions[1].sample(n1)
+		return N.array([N.sin(scat_ths) * N.cos(scat_phis),
+								   N.sin(scat_ths) * N.sin(scat_phis),
+								   N.cos(scat_ths)])
+
+
+	def _make_output_scattering_bundles(self, prev_inters, scat, scattered_path_lengths, directions, rays, selector):
+		scat_vertices = prev_inters[:, scat] + scattered_path_lengths[scat] * directions[:, scat]
+		media = self.get_media(rays.get_scat_coeff(selector[scat]))
+		scat_directions = self._get_scattering_directions(scat, media)
+		scat_directions = rotate_z_to_normal(scat_directions,
+											 directions[:, scat])  # rotate with z pointing in directions
+
+		scattered_rays = rays.inherit(selector[scat], vertices=scat_vertices,
+									  direction=scat_directions,
+									  parents=selector[scat])
+		return scattered_rays
+
+	def _make_scattering_bundle(self, rays, selector, inters, directions):
+		'''
+
+		:return: a tuple containing the scattered bundle, the boolean index array of non-scattered rays in the selected ray-properties data and the scattering coefficients of the full selected bundle.
+
+		'''
+		# scatter:
+		scat, scattered_path_lengths, prev_inters = self._scatter(rays, selector, inters)
+		# Make output bundle
+		if scat.any():
+			return self._make_output_scattering_bundles(prev_inters, scat, scattered_path_lengths, directions,
+																  rays, selector), ~scat
+		else:
+			return None, ~scat
+
+class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
+	'''
+	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.
+	'''
+
+	def __init__(self, period, sc, g_HG):
+		'''
+		Argument:
+		period: distance of periodic repetition. The ray positions are translated of period*normal vector for the next bundle, with same direction and energy.
+		sc: scattering coefficient of the medium
+		g_HG: phase function parameter of the medium
+		'''
+		self.period = period
+		Scattering.__init__(self, sc, None, g_HG, None)
+
+	def __call__(self, geometry, rays, selector):
+
+		# This is done this way so that the rendering knows that there is no ray between the hit on th efirst BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
+		# set original outgoing energy to 0
+		inters = geometry.get_intersection_points_global()
+		directions = rays.get_directions(selector)
+		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+		# if any ray is not scattered:
+		if nonscat.any():
+			outg = rays.inherit(selector[nonscat],
+								vertices=inters[:,nonscat],
+								energy=N.zeros(len(selector[nonscat])),
+								direction=directions[:,nonscat],
+								parents=selector[nonscat])
+			# If the bundle is polychromatic, also get and cancel the spectra
+			if rays.has_property('spectra'):
+				spectra = rays.get_spectra(selector[nonscat])
+				outg._spectra = N.zeros(spectra.shape)
+
+			# Create new bundle with the updated positions and all remaining properties identical:
+			outg2 = rays.inherit(selector[nonscat], vertices=inters[:,nonscat] + self.period * geometry.get_normals()[:,nonscat], parents=selector[nonscat])
+
+			# concatenate both bundles in one outgoing one
+			outg = outg + outg2
+
+			if nonscat.all():
+				return outg
+		if ~nonscat.any():
+			return scattered_rays
+		else:
+			return scattered_rays+outg
+
+class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant):
+	def __init__(self, period, sc, g_HG, material):
+		self.material = material
+		ScatteringPeriodicBoundary.__init__(self, period, sc, g_HG)
+
+	def __call__(self, geometry, rays, selector):
+		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
+		# set original outgoing energy to 0
+		inters = geometry.get_intersection_points_global()
+		directions = rays.get_directions(selector)
+		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+
+		# if any ray is not scattered:
+		hits = nonscat.any()
+		scat = scattered_rays is not None
+		'''
+		if scat:
+			# Attenuate ray energy:
+			wavelengths = rays.get_wavelengths(selector[~nonscat])
+			path_lengths = N.sqrt(N.sum((scattered_rays.get_vertices() - rays.get_vertices(selector[~nonscat])) ** 2, axis=0))
+			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
+										 lambda_0=wavelengths, energy=rays.get_energy(selector[~nonscat]))
+			scattered_rays.set_energy(energy)
+		'''
+		# if all rays are scattered
+		if ~hits:
+			outg = scattered_rays
+		if hits:
+			outg = rays.inherit(selector[nonscat],
+								energy=N.zeros(len(selector[nonscat])),
+								parents=selector[nonscat])
+			# If the bundle is polychromatic, also get and cancel the spectra
+			if rays.has_property('spectra'):
+				spectra = rays.get_spectra(selector[nonscat])
+				outg._spectra = N.zeros(spectra.shape)
+
+			# Create new bundle with the updated positions and all remaining properties identical:
+
+			# Attenuate ray energy:
+			'''
+			wavelengths = rays.get_wavelengths(selector[nonscat])
+			path_lengths = N.sqrt(
+				N.sum((inters[:,nonscat] - rays.get_vertices(selector[nonscat])) ** 2, axis=0))
+			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
+										 lambda_0=wavelengths, energy=rays.get_energy(selector[nonscat]))
+			
+			outg2 = rays.inherit(selector[nonscat],
+								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
+								 energy=energy,
+								 parents=selector[nonscat])
+			'''
+			outg2 = rays.inherit(selector[nonscat],
+								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
+								 parents=selector[nonscat])
+			# concatenate both bundles in one outgoing one
+			outg = outg + outg2
+			if scat:
+				outg = scattered_rays + outg
+
+			self.attenuate(rays, outg)
+		return outg
+
+
+class RefractiveScattering(Refractive, Scattering):
 	'''
 	Same as RefractiveHomogenous but with scattering in the medium.
 
 	On interaction:
 	1 - check if thee is any scattering
-		1 - a) if scattering, perform the calculation of teh scattering directions using H-G.
-	2 - If there is some non-scatterred light, it reaches a surface
+		1 - a) if scattering, perform the calculation of the scattering directions using H-G.
+	2 - If there is some non-scattered light, it reaches a surface
 		2 - a) Evaluate the refraction at that surface: rays can totally internally reflect
 		or refract
-		2 - b) If refraction event, choose wether to reflect or refract out of the surfcae
+		2 - b) If refraction event, choose whether to reflect or refract out of the surface
 		based on a random number
 	3 - regroup rays and output bundle
 
@@ -912,65 +1113,11 @@ class RefractiveScattering(Refractive):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
 
-	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True):
-		RefractiveHomogenous.__init__(self, n1, n2, single_ray)
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
 		self._s_cs = [s_c1, s_c2]  #
 		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
-
-	def toggle_scattering_coefficients(self, current_s_c):
-		"""
-		Determines which refractive index to use based on the refractive index and scattering
-		coefficient of the rays currently travelling through.
-
-		Arguments:
-		current_s_c - arrays of the refractive indices and scattering
-		coefficients of the materials each of the rays in a ray bundle is travelling through.
-
-		Returns:
-		An array of length(n) with the index to use for each ray.
-		"""
-		return N.where(current_s_c == self._s_cs[0],
-						  self._s_cs[1], self._s_cs[0])
-
-	def _scatter(self, rays, selector, inters):
-		# Check for scattering
-		prev_inters = rays.get_vertices(selector)
-		intersection_path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
-		s_cs = rays.get_scat_coeff(selector)
-
-		# Determine which ray gets scattered:
-		scat, scattered_path_lengths = optics.scattering(s_cs, intersection_path_lengths)
-		return scat, scattered_path_lengths, prev_inters
-
-	def _make_output_scattering_bundles(self, prev_inters, scat, scattered_path_lengths, directions, energy, rays, selector):
-		scat_vertices = prev_inters[:, scat] + scattered_path_lengths[scat] * directions[:, scat]
-		scat_ths, scat_phis = self.phase_function.sample(N.sum(scat))
-		scat_directions = N.array([N.sin(scat_ths) * N.cos(scat_phis),
-								   N.sin(scat_ths) * N.sin(scat_phis),
-								   N.cos(scat_ths)])
-		scat_directions = rotate_z_to_normal(scat_directions,
-											 directions[:, scat])  # rotate with z pointing in directions
-
-		scattered_rays = rays.inherit(selector[scat], vertices=scat_vertices,
-									  direction=scat_directions,
-									  energy=energy[scat],
-									  parents=selector[scat])
-		return scattered_rays
-
-	def _make_scattering_bundle(self, rays, selector, inters, directions, energy):
-		'''
-
-		:return: a tuple containing the scattered bundle, the boolean index array of non-scattered rays in the selected ray-properties data and the scattering coefficients of the full selected bundle.
-
-		'''
-		# scatter:
-		scat, scattered_path_lengths, prev_inters, s_cs = self._scatter(rays, selector, inters)
-		# Make output bundle
-		if scat.any():
-			return self._make_output_scattering_bundles(prev_inters, scat, scattered_path_lengths, directions,
-																  energy, rays, selector), ~scat
-		else:
-			return RayBundle().empty_bund(), ~scat
+		Scattering.__init__(self, s_c1, s_c2, 0., g_HG)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -980,13 +1127,41 @@ class RefractiveScattering(Refractive):
 		# get ray data:
 		directions, wavelengths, m1, energy = self._get_ray_data(rays, selector)
 		# make scattering bundle:
-		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions, energy)
-		# if any ray is not scattered:
-		if nonscat.any():
-			reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals[:,nonscat], inters[:,nonscat], directions[:,nonscat], wavelengths[nonscat], m1[nonscat], energy[nonscat], selector[nonscat])
-			refracted_rays.set_scat_coeff(self.toggle_scattering_coefficients(refracted_rays.get_scat_coeff()))
+		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
 
-		return sacttered_rays + reflected_rays + refracted_rays
+		hits = nonscat.any()
+		scat = scattered_rays is not None
+
+		output_bundle = 0
+		if scat:
+			output_bundle = scattered_rays
+		# if any ray is not scattered:
+		if hits:
+			reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals[:,nonscat], inters[:,nonscat], rays.inherit(selector=selector[nonscat]), directions[:,nonscat], wavelengths[nonscat], m1[nonscat], energy[nonscat], selector[nonscat])
+
+			if reflected_rays is not None:
+				if output_bundle != 0:
+					output_bundle +=  reflected_rays
+				else:
+					output_bundle = reflected_rays
+
+			if refracted_rays is not None:
+				refracted_rays.set_scat_coeff(self.toggle_scattering_coefficients(refracted_rays.get_scat_coeff()))
+				if output_bundle != 0:
+					output_bundle +=  refracted_rays
+				else:
+					output_bundle = refracted_rays
+
+		return output_bundle
+
+class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
+
+	def __call__(self, geometry, rays, selector):
+		out_rays = super().__call__(geometry, rays, selector)
+		self.attenuate(rays, out_rays)
+		return out_rays
 
 class RefractiveHomogenous(Refractive):
 	"""
@@ -1031,9 +1206,8 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 	def __init__(self, m1, m2, single_ray=True, sigma=None):
 		"""
 		Arguments:
-		n1, n2 - scalars representing the homogenous refractive index on each
+		m1, m2 - scalars representing the homogenous complex refractive index on each
 			side of the surface (order doesn't matter).
-		k1, k2 - extinction coefficients in each side of the surface. a1 corresponds to n1, a2 to n2.
 		single_ray - if True, refraction or reflection is decided for each ray
 			    based on the amount of reflection coefficient and only a single
 			    ray is launched in the next bundle. Otherwise, the ray is split into
@@ -1328,7 +1502,7 @@ class AbsorptionAccountant(Accountant):
 		self._absorbed = []
 
 	def count(self, geometry, rays, selector, new_bundle):
-		ein = rays.get_energy()[selector]
+		ein = rays.get_energy(selector)
 		eout = new_bundle.get_energy()
 		self._absorbed.append(ein - eout)
 
@@ -1359,7 +1533,7 @@ class ReceptionAccountant(Accountant):
 		self._received = []
 
 	def count(self, geometry, rays, selector, new_bundle):
-		ein = rays.get_energy()[selector]
+		ein = rays.get_energy(selector)
 		self._received.append(ein)
 
 	def get_data(self):
@@ -1417,7 +1591,7 @@ class DirectionAccountant(Accountant):
 		self._directions = []
 	
 	def count(self, geometry, rays, selector, new_bundle):
-		self._directions.append(rays.get_directions()[:,selector])
+		self._directions.append(rays.get_directions(selector))
 
 	def get_data(self):
 		"""
@@ -1548,7 +1722,7 @@ class BiFacial(object):
 
 	def __call__(self, geometry, rays, selector):
 
-		proj = N.around(N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis=0), decimals=6)
+		proj = N.around(N.sum(rays.get_directions(selector)*geometry.up()[:,None], axis=0), decimals=6)
 		back = proj > 0.
 		outg = []
 

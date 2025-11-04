@@ -354,6 +354,106 @@ class ExtrudedRectPlateGM(RectPlateGM):
 
 		return N.hstack(flux_bot), N.hstack(flux_mid_left), N.hstack(flux_mid_right), N.hstack(flux_top)
 
+class PerforatedRectPlateGM(RectPlateGM):
+
+	def __init__(self, width, height, extr_centers, extr_radii):
+		'''
+		extr_centers (2,n) is an array of n 2 component center of circular perforation locations in locall coordiantes
+		extr_radii is (1,n) array of radii, one for each center.
+		IMPORTANT: for now, perforations cannot be partly in the plate as the rendering is not ready.
+		'''
+		RectPlateGM.__init__(self, width, height)
+		self.extr_centers = extr_centers
+		self.extr_radii = extr_radii
+		#if not ( ((self.extr_centers-self.extr_radii[:,None])>(-self._half_dims)).all() and ((self.extr_centers+self.extr_radii[:,None])<self._half_dims).all()):
+		#	raise 'Hole is across teh side of the plate'
+
+	def find_intersections(self, frame, ray_bundle):
+		ray_prms = FiniteFlatGM.find_intersections(self, frame, ray_bundle)
+		ray_prms[N.any(N.abs(self._local[:2]) > self._half_dims, axis=0)] = N.inf
+		dist_to_centers = N.sqrt(N.sum((self._local[:2,:,None]-self.extr_centers.T[:2,None,:])**2, axis=0))# distance to center of perforations
+		ray_prms[N.any(dist_to_centers < self.extr_radii, axis=1)] = N.inf # hit si within the radius of the relevant perforation
+		del self._local
+		return ray_prms
+
+	def mesh(self, resolution):
+		"""
+		Represent the surface as a mesh in local coordinates.
+
+		Arguments:
+		resolution - in points per unit length (so the number of points
+			returned is O(A*resolution**2) for area A)
+
+		Returns:
+		x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
+			coordinate (respectively) of point (i,j) in the mesh.
+		As the surface is picewise defined, the mesh returns a series of arrays.
+		"""
+		if resolution == None:
+			resolution = 100
+
+		xs, ys = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], resolution+1), N.linspace(-self._half_dims[1,0], self._half_dims[1,0], resolution+1)
+		X, Y = N.broadcast_arrays(xs[:, None], ys)
+
+		points = N.array([N.hstack(X),N.hstack(Y)])
+
+		dist_to_centers = N.sqrt(N.sum((points[:,:, None] - self.extr_centers[:, None, :]) ** 2,
+									   axis=0))  # distance to center of perforations
+
+		angs = N.linspace(0., 2.*N.pi, resolution)
+
+		x_h, y_h = N.cos(angs), N.sin(angs)
+		ext_bounds = N.array([[-self._half_dims[0,0], self._half_dims[0,0]], [-self._half_dims[1, 0], self._half_dims[1, 0]]])
+		facets = []
+		bounds = []
+		for i, c in enumerate(self.extr_centers):
+			ri = self.extr_radii[i]
+			xis, yis = ri*x_h, ri*y_h
+			xos, yos = N.sqrt(2.)*xis, N.sqrt(2.)*yis
+
+			xos[xos > ri] = ri
+			yos[yos > ri] = ri
+			xos[xos < -ri] = -ri
+			yos[yos < -ri] = -ri
+
+			for j in range(len(xis[:-1])):
+				X = N.array([xis[j:j+2],xos[j:j+2]])
+				Y= N.array([yis[j:j+2],yos[j:j+2]])
+				facets.append(X+c[0])
+				facets.append(Y+c[1])
+				facets.append(N.zeros((2,2)))
+
+			bounds.append([[c[0] - ri, c[0] + ri], [c[1] - ri, c[1] + ri]])
+
+		bounds.append(ext_bounds)
+		bounds = N.array(bounds)
+
+		ordered_x = N.sort(N.unique(N.hstack(bounds[:,0])))
+		ordered_y = N.sort(N.unique(N.hstack(bounds[:,1])))
+	
+		for i, x in enumerate(ordered_x[:-1]):
+			x0, x1 = ordered_x[i:i+2]
+			for j, y in enumerate(ordered_y[:-1]):
+				y0, y1 = ordered_y[j:j + 2]
+
+				overlap_strt = (N.array([x0,y0]) == bounds[:-1,:,0]).all(axis=-1)
+				overlap_end = (N.array([x1,y1]) == bounds[:-1,:,1]).all(axis=-1)
+				overlap_in = N.logical_and(N.logical_and(x0>=bounds[:-1,0,0], x1<=bounds[:-1,0,1]), N.logical_and(y0>=bounds[:-1,1,0], y1<=bounds[:-1,1,1]))
+				overlap = N.logical_or(N.logical_or(overlap_strt,  overlap_end), overlap_in)
+				mesh = ~overlap.any()
+
+				if mesh:
+					X = N.array([[x0,x1],[x0,x1]])
+					Y = N.array([[y0,y0],[y1,y1]])
+					Z = N.zeros((2,2))
+					facets.append(X)
+					facets.append(Y)
+					facets.append(Z)
+
+		return tuple(facets)
+
+	#def get_fluxmap(self, eners, local_coords, resolution):
+
 class RoundPlateGM(FiniteFlatGM):
 	"""
 	Trims the infinite flat surface by marking as missing the rays falling
