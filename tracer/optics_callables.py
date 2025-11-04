@@ -1067,13 +1067,16 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
 
-	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True):
-		RefractiveHomogenous.__init__(self, n1, n2, single_ray)
+	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+		RefractiveHomogenous.__init__(self, n1, n2, single_ray, sigma)
 
 		self._s_cs = [s_c1, s_c2]  #
 		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
 
-	def toggle_media(self, current_ref_idx, current_s_c):
+	def __call__(self, geometry, rays, selector):
+		return RefractiveScattering.__call__(self, geometry, rays, selector)
+	'''
+	def` toggle_media(self, current_ref_idx, current_s_c):
 		"""
 		Determines which refractive index to use based on the refractive index and scattering
 		coefficient of the rays currently travelling through.
@@ -1212,7 +1215,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 			else:
 				ret_bundle = reflected_rays + refracted_rays
 		return ret_bundle
-
+		'''
 class FresnelConductorHomogenous(object):
 	'''
 	Fresnel equation with a conductive medium instersected. The attenuation is total in a very short range in the intersected metal and refraction is not modelled. Only strictly valid for k2 >> 1 and in situations where the refracted ray is not interacting with the scene again (eg. not traversing thin metal volumes).
