@@ -153,7 +153,7 @@ Reference:
 			else:
 				max_rays = N.amin([max_rays, len(se)])
 
-			if tree.num_bunds() ==1:
+			if tree.num_bunds() == 1:
 				parents = []
 				shown = N.arange(max_rays)
 			elif level == tree.num_bunds() - 1:
@@ -162,29 +162,34 @@ Reference:
 			else:
 				end_rays = tree[level + 1]
 				ev = end_rays.get_vertices()
+				ee = end_rays.get_energy()
 				parents = end_rays.get_parents()
 				if level==0:
 					shown = N.random.choice(len(se), size=max_rays, replace=False)
-					parents_of_shown = N.in1d(parents, shown)
+					parents_of_shown = N.isin(parents, shown)
 				else:
 					shown = N.nonzero(parents_of_shown)[0]
-					parents_of_shown = N.in1d(parents, shown)
+					parents_of_shown = N.isin(parents, shown)
 
 			# loop through individual rays in the selection
 			for ray in shown:
 				if se[ray] <= self.sim.minener:
 					# ignore rays with starting energy smaller than energy cutoff
 					continue
-		
+
 				if ray in parents:
 					# Has a hit on another surface
 					first_childs = N.nonzero(ray == parents)[0]
 					c1 = sv[:,ray]
-					for cs in first_childs:
-						c2 = ev[:,cs]
+					if len(first_childs) > 1:
+						cs = first_childs[ee[first_childs]>0.]
+					else:
+						cs = first_childs[0]
+					c2 = ev[:,cs]
+					if (c2 != c1).any():
 						# if the ray is not on the direction, it is a boundary condition affected ray and should not be represented
-						dir_vecs = N.round((c2-c1)/N.sqrt(N.sum((c2-c1)**2)), decimals=6)
-						dir_ray = N.round(sd[:,ray], decimals=6)
+						dir_vecs = N.round((c2-c1)/N.sqrt(N.sum((c2-c1)**2)), decimals=9)
+						dir_ray = N.round(sd[:,ray], decimals=9)
 						if (dir_vecs == dir_ray).all():
 							co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
@@ -194,6 +199,7 @@ Reference:
 					c1 = sv[:,ray]
 					c2 = sv[:,ray] + sd[:,ray]*l
 					co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
+
 
 			color=(int((1.-float(level)/lentree)*255),0,0)
 			

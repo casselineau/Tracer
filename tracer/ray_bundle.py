@@ -157,7 +157,7 @@ class RayBundle:
 				# Create the property if its not in the base set:
 				if not newbund.has_property(attr):
 					newbund._create_property(attr[1:], None)
-				
+
 				# Do addition.
 				newbund.__dict__['set' + attr](N.hstack((
 					self.__dict__['get' + attr](),
@@ -172,11 +172,13 @@ class RayBundle:
 		"""
 		empty = RayBundle()
 		empty_array = N.array([[],[],[]])
+
 		empty.set_directions(empty_array)
 		empty.set_vertices(empty_array)
 		empty.set_energy(N.array([]))
 		empty.set_parents(N.array([], dtype=int))
 		empty.set_ref_index(N.array([]))
+
 		return empty
 
 	def delete_rays(self, selector):
@@ -185,6 +187,8 @@ class RayBundle:
 		denoted by ``selector`` are not copied. Basically equivalent to using
 		``inherit()``, with an inverted selector and no other arguments.
 		"""
+		if selector is None:
+			selector = N.arange(self.get_num_rays())
 		inherit_select = N.delete(N.arange(self.get_num_rays()), selector)
 		outg = self.inherit(inherit_select)
 		 
