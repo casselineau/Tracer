@@ -76,7 +76,12 @@ Reference:
 		viewer = SoGuiExaminerViewer(win)
 		bgcol = coin.SbColor(.9*255,.9*255,.8*255)
 		viewer.setBackgroundColor(bgcol)
-		viewer.quarterwidget.sorendermanager.setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
+		
+		try:
+			viewer.quarterwidget.sorendermanager.getGLRenderAction().setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
+		except:
+			viewer.quarterwidget.sorendermanager.setTransparencyType(coin.SoTransparencyType.DELAYED_BLEND)
+		
 		viewer.setSceneGraph(self.r)
 		viewer.setTitle("Examiner Viewer")
 		viewer.show()
@@ -216,9 +221,47 @@ Reference:
 
 		self.r.addChild(no)
 
-	def show_rays(self, escaping_len=.02, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None, bounding_boxes=None, only_rays=False):
+
+	def show_rays(self, escaping_len=.02, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None, bounding_boxes=None, only_rays=False, create_scene_for_export_only=False):
 		self.rays(escaping_len, max_rays, resolution)
 		if not only_rays:
 			self.geom(resolution, fluxmap, trans, vmin, vmax, bounding_boxes)
-		self.show()
 
+		if not create_scene_for_export_only:
+			self.show()
+
+
+	def export_inventor(self, filename="scene.iv"):
+		"""
+		Export the current Coin3D scene graph (self.r) to an Open Inventor file.
+
+		Requires to call geom()/rays()/show_rays() first so the geometry 
+		is already attached to self.r.
+		"""
+
+		wa = coin.SoWriteAction()
+		out = wa.getOutput()
+		if not out.openFile(filename):
+			raise IOError("Could not open %s for writing" % filename)
+		
+		out.setBinary(False)
+		wa.apply(self.r)
+		out.closeFile()
+
+	
+	def export(self, filename, format=None):
+		"""
+		Wrapper to simplify support of additional formats.
+
+		Examples:
+			renderer.export("scene.iv")       # Open Inventor
+		"""
+		if format is None:
+			ext = filename.split(".")[-1].lower()
+		else:
+			ext = format.lower()
+
+		if ext in ("iv", "inventor"):
+			self.export_inventor(filename)
+		else:
+			raise ValueError(f"Unknown export format: {ext}")
