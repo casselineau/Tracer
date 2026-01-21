@@ -12,7 +12,7 @@ class AssembledObject(Assembly):
 	The object also tracks refractive indices as a ray bundle leaves or enters a new
 	material.
 	"""
-	def __init__(self, surfs=None, bounds=None, location=None, rotation=None, transform=None):
+	def __init__(self, surfs=None, bounds=None, transform=None):
 		"""
 		Attributes:
 		surfaces - a list of Surface objects
@@ -42,14 +42,9 @@ class AssembledObject(Assembly):
 
 		if transform is None:
 			transform = N.eye(4)
-			if rotation is not None:
-				transform[:3,:3] = rotation
-			if location is not None:
-				transform[:3,3] = location
 
 		self.set_transform(transform)
 
-   
 	def get_surfaces(self):
 		return self.surfaces
 
@@ -114,9 +109,9 @@ class AssembledObject(Assembly):
 
 	def get_scene_graph(self,resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
 		n = self.get_scene_graph_transform()
-
-		for sfc in self.surfaces:
-			n.addChild(sfc.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
+		if self.surfaces is not None:
+			for sfc in self.surfaces:
+				n.addChild(sfc.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
 
 		return n
 

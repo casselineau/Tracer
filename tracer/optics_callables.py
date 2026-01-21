@@ -1042,15 +1042,7 @@ class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant)
 		# if any ray is not scattered:
 		hits = nonscat.any()
 		scat = scattered_rays is not None
-		'''
-		if scat:
-			# Attenuate ray energy:
-			wavelengths = rays.get_wavelengths(selector[~nonscat])
-			path_lengths = N.sqrt(N.sum((scattered_rays.get_vertices() - rays.get_vertices(selector[~nonscat])) ** 2, axis=0))
-			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
-										 lambda_0=wavelengths, energy=rays.get_energy(selector[~nonscat]))
-			scattered_rays.set_energy(energy)
-		'''
+
 		# if all rays are scattered
 		if ~hits:
 			outg = scattered_rays
@@ -1064,20 +1056,6 @@ class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant)
 				outg._spectra = N.zeros(spectra.shape)
 
 			# Create new bundle with the updated positions and all remaining properties identical:
-
-			# Attenuate ray energy:
-			'''
-			wavelengths = rays.get_wavelengths(selector[nonscat])
-			path_lengths = N.sqrt(
-				N.sum((inters[:,nonscat] - rays.get_vertices(selector[nonscat])) ** 2, axis=0))
-			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
-										 lambda_0=wavelengths, energy=rays.get_energy(selector[nonscat]))
-			
-			outg2 = rays.inherit(selector[nonscat],
-								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
-								 energy=energy,
-								 parents=selector[nonscat])
-			'''
 			outg2 = rays.inherit(selector[nonscat],
 								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
 								 parents=selector[nonscat])
@@ -1086,6 +1064,7 @@ class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant)
 			if scat:
 				outg = scattered_rays + outg
 
+			# Attenuate ray energy:
 			self.attenuate(rays, outg)
 		return outg
 
