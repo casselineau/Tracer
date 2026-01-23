@@ -711,15 +711,15 @@ class PeriodicBoundary(object):
 		period: distance of periodic repetition. The ray positions are translated of period*normal vector for the next bundle, with same direction and energy.
 		'''
 		self.period = period
-		
+
 	def __call__(self, geometry, rays, selector):
-		# This is done this way so that the rendering knows that there is no ray between the hit on th efirst BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
+		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray startingaway from that position. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
 		vertices = geometry.get_intersection_points_global()
 		outg = rays.inherit(selector,
 			vertices=vertices,
 			energy=N.zeros(len(selector)),
-			direction=rays.get_directions(selector), 
+			direction=rays.get_directions(selector),
 			parents=selector)
 		# If the bundle is polychromatic, also get and cancel the spectra
 		if rays.has_property('spectra'):
@@ -733,7 +733,7 @@ class PeriodicBoundary(object):
 
 		# concatenate both bundles in one outgoing one
 		outg = outg + outg2
-		
+
 		return outg
 
 
@@ -909,7 +909,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 class Scattering(object):
 
 	def __init__(self, s_c1, s_c2, g_HG_1, g_HG_2):
-		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictats alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
+		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictates alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
 		self.phase_functions = [Henyey_Greenstein(g_HG_1), Henyey_Greenstein(g_HG_2)]
 
 	def get_media(self, current_s_c):
@@ -928,15 +928,20 @@ class Scattering(object):
 		return N.where(current_s_c == self._s_cs[0],
 					   self._s_cs[1], self._s_cs[0])
 
-	def _scatter(self, rays, selector, inters):
+	def _scatter(self, rays, selector, inters, keep_path_lengths=False):
 		# Check for scattering
 		prev_inters = rays.get_vertices(selector)
 		intersection_path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
 		s_cs = rays.get_scat_coeff(selector)
-
 		# Determine which ray gets scattered:
-		scat, scattered_path_lengths = optics.scattering(s_cs, intersection_path_lengths)
+		scat_output = optics.scattering(s_cs, intersection_path_lengths, keep_path_lengths)
+		if not keep_path_lengths:
+			scat, scattered_path_lengths = scat_output
+		else:
+			scat, scattered_path_lengths, self.to_scatter = scat_output
+
 		return scat, scattered_path_lengths, prev_inters
+
 
 	def _get_scattering_directions(self, scat, media):
 
@@ -965,14 +970,14 @@ class Scattering(object):
 									  parents=selector[scat])
 		return scattered_rays
 
-	def _make_scattering_bundle(self, rays, selector, inters, directions):
+	def _make_scattering_bundle(self, rays, selector, inters, directions, keep_path_lengths=False):
 		'''
 
 		:return: a tuple containing the scattered bundle, the boolean index array of non-scattered rays in the selected ray-properties data and the scattering coefficients of the full selected bundle.
 
 		'''
 		# scatter:
-		scat, scattered_path_lengths, prev_inters = self._scatter(rays, selector, inters)
+		scat, scattered_path_lengths, prev_inters = self._scatter(rays, selector, inters, keep_path_lengths)
 		# Make output bundle
 		if scat.any():
 			return self._make_output_scattering_bundles(prev_inters, scat, scattered_path_lengths, directions,
@@ -1001,14 +1006,18 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 		# set original outgoing energy to 0
 		inters = geometry.get_intersection_points_global()
 		directions = rays.get_directions(selector)
-		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions, keep_path_lengths=True)
+		# if we have nonscattered rays hitting a periodic bc, we need to alter the scattering coefficients in the next bundle to be complex and have their imaginary part the remaining path length to scattering
 		# if any ray is not scattered:
 		if nonscat.any():
+			# We add existing path lengths of non-scattered as a imaginary part in scattering coefficient.
+			new_s_cs = rays.get_scat_coeff(selector[nonscat]) + self.to_scatter[nonscat] * 1j
 			outg = rays.inherit(selector[nonscat],
 								vertices=inters[:,nonscat],
 								energy=N.zeros(len(selector[nonscat])),
 								direction=directions[:,nonscat],
-								parents=selector[nonscat])
+								parents=selector[nonscat],
+								scat_coeff=new_s_cs)
 			# If the bundle is polychromatic, also get and cancel the spectra
 			if rays.has_property('spectra'):
 				spectra = rays.get_spectra(selector[nonscat])
