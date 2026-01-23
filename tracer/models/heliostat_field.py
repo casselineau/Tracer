@@ -80,16 +80,13 @@ class HeliostatField(Assembly):
 	def get_heliostats(self):
 		"""Access the list of one-sided mirrors representing the heliostats"""
 		return self._heliostats
-	
-<<<<<<< Updated upstream
-	def aim_to_sun(self, azimuth, zenith, aim_points=None, aim_vectors=None, tracking='azimuth_elevation', tracking_error=None, tracking_limits_primary_axis=None, tracking_limits_secondary_axis=None):
-=======
+
 	def set_aim_height(self, h):
 		"""Change the verical position of the tower's target."""
 		self._th = h
 	
 	def track_sun(self, azimuth, zenith, aim_points=None, aim_vectors=None, tracking='azimuth_elevation', tracking_error=None, tracking_limits_primary_axis=None, tracking_limits_secondary_axis=None):
->>>>>>> Stashed changes
+
 		"""
 		Aim the heliostats in a direction that brings the incident energy to
 		the receiver location.
