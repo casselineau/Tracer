@@ -203,8 +203,6 @@ class TracerEngine():
 					t0 = time.time()
 					if any_inter:
 						front_surf, owned_rays = self.intersect_ray(bund, surfaces, surfs_relevancy)
-					else:
-						continue
 			else:
 				front_surf, owned_rays = self.intersect_ray(bund, surfaces, surfs_relevancy)#self.intersect_ray_old(bund, surfaces, objects, surf_ownership, ray_ownership, surfs_relevancy)
 				

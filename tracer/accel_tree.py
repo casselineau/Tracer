@@ -50,19 +50,19 @@ class KdTree(object):
 
 		surf_per_object = N.array([len(o.get_surfaces()) for o in self.objects]) # number of surfaces per object
 		idx_surfs_per_object = [N.arange(N.sum(surf_per_object[:i]), N.sum(surf_per_object[:i+1])) for i, spo in enumerate(surf_per_object)] # Ordered index of the surfaces in each object.
-		surfs_idx = [N.repeat(ispo, bounds_per_object[i]) for i, ispo in enumerate(idx_surfs_per_object) if bounds_per_object[i]>0]   # indices of surfaces relevant to each boundary
+		surfs_idx = N.repeat(idx_surfs_per_object, bounds_per_object)  # indices of surfaces relevant to each bounday
 
 		minpoints = N.empty((3,total_bounds))
 		maxpoints = N.empty((3,total_bounds))
 		bounds = N.empty((3,2*total_bounds))
 		
-		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used by the traversal algorithm to always make the listed objects relevant in the ray-trace.
+		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used by the traversal algorithm to always make the listed bjects relevant in the ray-trace.
 		i = 0
 		# load all the data
 
 		for index, bounds_o in enumerate(boundaries):
 			if bounds_o == []:
-				self.always_relevant.append(idx_surfs_per_object[index])
+				self.always_relevant.append(index)
 			else:
 				for b in bounds_o:
 					minpoints[:,i] = b._minpoint
@@ -70,7 +70,6 @@ class KdTree(object):
 					bounds[:,2*i] = b._minpoint
 					bounds[:,2*i+1] = b._maxpoint
 					i+=1
-		self.always_relevant = N.hstack(self.always_relevant)
 
 		# find the largest bounding box
 		self.minpoint, self.maxpoint = AABB(bounds)
@@ -103,7 +102,7 @@ class KdTree(object):
 			if (in_node_count<=self.min_leaf) or (node_level>=self.max_depth):
 				# make node a leaf:
 				self.nodes[node_idx].flag = 3
-				self.nodes[node_idx].surfaces_idxs = [s for i, s in enumerate(surfs_idx) if in_node[i]]
+				self.nodes[node_idx].surfaces_idxs = surfs_idx[in_node]
 			else:
 				# find/determine split
 				bounds_in_node = bounds[:, N.tile(in_node,2)]
@@ -111,7 +110,7 @@ class KdTree(object):
 				if split[0] == 3:
 					# make parent node a leaf:
 					self.nodes[node_idx].flag = 3
-					self.nodes[node_idx].surfaces_idxs = [s for i, s in enumerate(surfs_idx) if in_node[i]]
+					self.nodes[node_idx].surfaces_idxs = surfs_idx[in_node]
 				else:
 					self.nodes[node_idx].flag = int(split[0])
 					self.nodes[node_idx].split = split[1]
@@ -234,7 +233,7 @@ class KdTree(object):
 			surfaces_relevancy = N.zeros((self.n_surfs, nrays), dtype=bool)
 			surfaces_relevancy[self.always_relevant] = True
 
-		if inters.any() or self.always_relevant.any():
+		if inters.any():
 			n_inters = len(inters)
 			# for rays that do intersect, go down the tree (or up?):
 			for r in range(n_inters):
@@ -285,7 +284,7 @@ class KdTree(object):
 									surfaces_relevancy[s][ray_orders[r]] += [r]
 							ray_orders[r] += 1
 						else:
-							surfaces_relevancy[node.surfaces_idxs,r] = True
+							surfaces_relevancy[node.surfaces_idxs.tolist(),r] = True
 
 						any_inter = True
 

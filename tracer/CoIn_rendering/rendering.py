@@ -177,11 +177,16 @@ Reference:
 					first_childs = N.nonzero(ray == parents)[0]
 					c1 = sv[:,ray]
 					if len(first_childs) > 1:
-						cs = int(first_childs[ee[first_childs]==0.]) # the end of the ray is teh atsrt ofthe cancelled ray because of teh periodic BC. This ray has 0 energy.
+						cs = first_childs[ee[first_childs]>0.]
 					else:
 						cs = first_childs[0]
 					c2 = ev[:,cs]
-					co += [(c1[0], c1[1], c1[2]), (c2[0], c2[1], c2[2])]
+					if (c2 != c1).any():
+						# if the ray is not on the direction, it is a boundary condition affected ray and should not be represented
+						dir_vecs = N.round((c2-c1)/N.sqrt(N.sum((c2-c1)**2)), decimals=9)
+						dir_ray = N.round(sd[:,ray], decimals=9)
+						if (dir_vecs == dir_ray).all():
+							co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
 				else:
 					l = escaping_len

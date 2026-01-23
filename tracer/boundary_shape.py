@@ -60,7 +60,7 @@ class BoundaryBox(BoundaryShape):
 		AABB - axis aligned bounding box: array or list of [minpoint, maxpoint] with minpoint the lowest dimensions corner of the axis-aligned bounding box and maxpoint the the highest dimensions corner of the axis-aligned bounding box, in the local surface referential. The implementation automatically transforms these points to global coordinates each time there is a transform applied to the object/assembly.
 		"""
 		BoundaryShape.__init__(self, location, rotation)
-		self._aabb = N.array(aabb) # local box
+		self._aabb = aabb # local box
 		self._AABB = N.array(aabb) # global box
 		
 	def update_AABB(self):
