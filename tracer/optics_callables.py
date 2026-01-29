@@ -1044,37 +1044,10 @@ class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant)
 	def __call__(self, geometry, rays, selector):
 		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
-		inters = geometry.get_intersection_points_global()
-		directions = rays.get_directions(selector)
-		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+		outg = ScatteringPeriodicBoundary.__call__(self, geometry, rays, selector)
 
-		# if any ray is not scattered:
-		hits = nonscat.any()
-		scat = scattered_rays is not None
-
-		# if all rays are scattered
-		if ~hits:
-			outg = scattered_rays
-		if hits:
-			outg = rays.inherit(selector[nonscat],
-								energy=N.zeros(len(selector[nonscat])),
-								parents=selector[nonscat])
-			# If the bundle is polychromatic, also get and cancel the spectra
-			if rays.has_property('spectra'):
-				spectra = rays.get_spectra(selector[nonscat])
-				outg._spectra = N.zeros(spectra.shape)
-
-			# Create new bundle with the updated positions and all remaining properties identical:
-			outg2 = rays.inherit(selector[nonscat],
-								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
-								 parents=selector[nonscat])
-			# concatenate both bundles in one outgoing one
-			outg = outg + outg2
-			if scat:
-				outg = scattered_rays + outg
-
-			# Attenuate ray energy:
-			self.attenuate(rays, outg)
+		# Attenuate ray energy:
+		self.attenuate(rays, outg)
 		return outg
 
 
