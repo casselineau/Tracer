@@ -777,8 +777,8 @@ class Refractive(object):
 	def _refract_dirs(self, normals, m1, wavelengths, directions):
 		if self._sigma is not None:
 			th = N.random.normal(scale=self._sigma, size=N.shape(normals[1]))
-			phi = N.random.uniform(low=0., high=N.pi, size=N.shape(normals[1]))
-			normal_errors = N.vstack((N.cos(th), N.sin(th) * N.cos(phi), N.sin(th) * N.sin(phi)))
+			phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(normals[1]))
+			normal_errors = N.vstack((N.sin(th) * N.cos(phi), N.sin(th) * N.sin(phi), N.cos(th)))
 
 			# Determine rotation matrices for each normal:
 			rots_norms = rotation_to_z(normals.T)

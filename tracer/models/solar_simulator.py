@@ -140,7 +140,7 @@ class SolarSimulatorModule(Assembly):
 	'''
 	A module class for solar simulator including an ellipsoidal reflector and a plasma arc lamp source.
 	'''
-	def __init__(self, a, b, c, zlim, reflectivity=0.9, slope_error=2.5e-3, lampdict={'model':'Bader', 'P_elec':2.5e3, 'eff_el':0.6, 'r_c':7.5e-4, 'l_c':4.5e-3, 'theta_CDF':'/media/ael/Flashy/backup_05-06-2021/Documents/Boulot/Projects/Solar_simulator/CDF_theta.dat'}, first_focus_location=N.array([0,0,0]), aiming_vector=N.array([0,0,1])):
+	def __init__(self, a, b, c, zlim, reflectivity=0.9, slope_error=2.5e-3, bi_var=False, lampdict={'model':'Bader', 'P_elec':2.5e3, 'eff_el':0.6, 'r_c':7.5e-4, 'l_c':4.5e-3, 'theta_CDF':'/media/ael/Flashy/backup_05-06-2021/Documents/Boulot/Projects/Solar_simulator/CDF_theta.dat'}, first_focus_location=N.array([0,0,0]), aiming_vector=N.array([0,0,1])):
 		'''
 		Parameters:
 		- a, b and c are the parameters of the ellipsoid shape: the semi axes in x, y and z directions
@@ -161,7 +161,7 @@ class SolarSimulatorModule(Assembly):
 		self.rotation = general_axis_rotation(axis, angle)
 			
 		objects = []
-		self.reflector = SimulatorReflector(a, b, c, zlim, self.location, self.rotation)
+		self.reflector = SimulatorReflector(a, b, c, zlim, self.location, self.rotation, reflectivity, slope_error, bi_var)
 		objects.append(self.reflector)
 		Assembly.__init__(self, objects=objects)
 		model = lampdict['model']
@@ -193,7 +193,7 @@ class SolarSimulatorModule(Assembly):
 		return source
 
 class SimulatorReflector(AssembledObject):
-	def __init__(self, a, b, c, zlim, location, rotation, reflectivity=0.9, slope_error=2.5e-3):
+	def __init__(self, a, b, c, zlim, location, rotation, reflectivity=0.9, slope_error=2.5e-3, bi_var=False):
 		'''
 		An ellipsoid reflector class defined by semi-axes.
 		Parameters:
@@ -205,7 +205,7 @@ class SimulatorReflector(AssembledObject):
 		excentricity = N.sqrt(1.-a**2/c**2)
 		half_focal_dist = c*excentricity
 		geom = EllipsoidGM(a, b, c, zlim=zlim)
-		opt = RealReflective(absorptivity=0.1, sigma=slope_error, bi_var=False)
+		opt = RealReflective(absorptivity=1.-reflectivity, sigma=slope_error, bi_var=bi_var)
 		AssembledObject.__init__(self, surfs=[Surface(geometry=geom, optics=opt, location=N.array([0.,0.,half_focal_dist]))], location=location, rotation=rotation)
 		self.excentricity = excentricity
 		self.focal_dist = 2.*half_focal_dist
