@@ -127,6 +127,23 @@ class Reflective(object):
 
 		return outg
 
+class Reflective_spectral(object):
+	def __init__(self, absorptances, wavelengths):
+		self._wavelengths = wavelengths
+		self._absorptances = absorptances
+
+	def __call__(self, geometry, rays, selector):
+		energy = rays.get_energy(selector)
+		wavelengths = rays.get_wavelengths(selector)
+		energy = energy * (1. - N.interp(wavelengths, self._wavelengths, self._absorptances))
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							direction=optics.reflections(rays.get_directions(selector=selector),
+														 geometry.get_normals()),
+							energy=energy,
+							parents=selector)
+		return outg
+
 class OneSidedReflective(Reflective):
 	"""
 	This optics manager behaves similarly to the ReflectiveReceiver class,
@@ -866,10 +883,14 @@ class Refractive(object):
 
 class Absorbant(object):
 
+	def __init__(self, scaling=1.):
+		# if we scale teh raytrace geometry to avoid floating point errors on intersections, wre have to modify attenuations
+		self._scaling = scaling
+
 	def attenuate(self, previous_bundle, new_bundle):
 		prev_inters = previous_bundle.get_vertices(new_bundle.get_parents())
 		inters = new_bundle.get_vertices()
-		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
+		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))*self._scaling
 		energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
 		new_bundle.set_energy(energy)
 
@@ -878,7 +899,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	'''
 
-	def __init__(self, material_1, material_2, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, single_ray=True, sigma=None, scaling=1.):
 		"""
 		Arguments:
 		material_1, material_2 - Material classes from the optical_constants module.
@@ -886,6 +907,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
+		Absorbant.__init__(self, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -895,7 +917,12 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 		# get ray data:
 		directions, wavelengths, m1, energy = self._get_ray_data(rays, selector)
 		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
-		outg = reflected_rays + refracted_rays
+		if reflected_rays is None:
+			outg = refracted_rays
+		elif refracted_rays is None:
+			outg = reflected_rays
+		else:
+			outg = reflected_rays + refracted_rays
 		'''# Compute attenuation in current medium:
 		prev_inters = rays.get_vertices(outg.get_parents())
 		inters = outg.get_vertices()
@@ -1037,9 +1064,10 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 			return scattered_rays+outg
 
 class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant):
-	def __init__(self, period, sc, g_HG, material):
+	def __init__(self, period, sc, g_HG, material, scaling=1.):
 		self.material = material
 		ScatteringPeriodicBoundary.__init__(self, period, sc, g_HG)
+		Absorbant.__init__(self, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
@@ -1116,8 +1144,10 @@ class RefractiveScattering(Refractive, Scattering):
 		return output_bundle
 
 class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None, scaling=1.):
 		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
+		Absorbant.__init__(self, scaling)
+
 
 	def __call__(self, geometry, rays, selector):
 		out_rays = super().__call__(geometry, rays, selector)
@@ -1164,7 +1194,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 	where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	There is WIP to add this small efect in the optics module.
 	'''
-	def __init__(self, m1, m2, single_ray=True, sigma=None):
+	def __init__(self, m1, m2, single_ray=True, sigma=None, scaling=1.):
 		"""
 		Arguments:
 		m1, m2 - scalars representing the homogenous complex refractive index on each
@@ -1177,7 +1207,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 		RefractiveHomogenous.__init__(self, m1, m2, single_ray, sigma)
 
 	def __call__(self, geometry, rays, selector):
-		return RefractiveAbsorbant.__call__(self, geometry, rays, selector)
+		return RefractiveAbsorbant.__call__(self, geometry, rays, selector, scaling=scaling)
 
 class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	'''
