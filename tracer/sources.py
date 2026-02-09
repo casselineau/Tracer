@@ -731,7 +731,7 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 
 	Arguments:
 	positions 	ray positions
-	normals  	normals to the surface at teh ray positions.
+	normals  	normals to the surface at the ray positions.
 	thetas 	 	angles at which emittances are given
 	band_emittance 	if a number, the band hemispherical emittance,
 					if a 1D array of the length of thetas, the directional band emittances
@@ -767,3 +767,4 @@ def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, are
 	rayb._create_property('ref_index', N.ones(nrays)*ref_index)
 
 	return rayb
+

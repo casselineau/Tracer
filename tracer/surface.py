@@ -166,7 +166,7 @@ class Surface(HasFrame):
 				mat = coin.SoMaterial()
 				mat.diffuseColor = (.5,.5,.5)
 				mat.specularColor = (.6,.6,.6)
-				mat.shininess = o._abs
+				#mat.shininess = o._abs
 				n0.addChild(mat)
 				fluxmap = False
 

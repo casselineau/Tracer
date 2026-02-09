@@ -127,6 +127,23 @@ class Reflective(object):
 
 		return outg
 
+class Reflective_spectral(object):
+	def __init__(self, absorptances, wavelengths):
+		self._wavelengths = wavelengths
+		self._absorptances = absorptances
+
+	def __call__(self, geometry, rays, selector):
+		energy = rays.get_energy(selector)
+		wavelengths = rays.get_wavelengths(selector)
+		energy = energy * (1. - N.interp(wavelengths, self._wavelengths, self._absorptances))
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							direction=optics.reflections(rays.get_directions(selector=selector),
+														 geometry.get_normals()),
+							energy=energy,
+							parents=selector)
+		return outg
+
 class OneSidedReflective(Reflective):
 	"""
 	This optics manager behaves similarly to the ReflectiveReceiver class,
@@ -711,15 +728,15 @@ class PeriodicBoundary(object):
 		period: distance of periodic repetition. The ray positions are translated of period*normal vector for the next bundle, with same direction and energy.
 		'''
 		self.period = period
-		
+
 	def __call__(self, geometry, rays, selector):
-		# This is done this way so that the rendering knows that there is no ray between the hit on th efirst BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
+		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray startingaway from that position. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
 		vertices = geometry.get_intersection_points_global()
 		outg = rays.inherit(selector,
 			vertices=vertices,
 			energy=N.zeros(len(selector)),
-			direction=rays.get_directions(selector), 
+			direction=rays.get_directions(selector),
 			parents=selector)
 		# If the bundle is polychromatic, also get and cancel the spectra
 		if rays.has_property('spectra'):
@@ -733,7 +750,7 @@ class PeriodicBoundary(object):
 
 		# concatenate both bundles in one outgoing one
 		outg = outg + outg2
-		
+
 		return outg
 
 
@@ -777,8 +794,8 @@ class Refractive(object):
 	def _refract_dirs(self, normals, m1, wavelengths, directions):
 		if self._sigma is not None:
 			th = N.random.normal(scale=self._sigma, size=N.shape(normals[1]))
-			phi = N.random.uniform(low=0., high=N.pi, size=N.shape(normals[1]))
-			normal_errors = N.vstack((N.cos(th), N.sin(th) * N.cos(phi), N.sin(th) * N.sin(phi)))
+			phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(normals[1]))
+			normal_errors = N.vstack((N.sin(th) * N.cos(phi), N.sin(th) * N.sin(phi), N.cos(th)))
 
 			# Determine rotation matrices for each normal:
 			rots_norms = rotation_to_z(normals.T)
@@ -866,10 +883,14 @@ class Refractive(object):
 
 class Absorbant(object):
 
+	def __init__(self, scaling=1.):
+		# if we scale teh raytrace geometry to avoid floating point errors on intersections, wre have to modify attenuations
+		self._scaling = scaling
+
 	def attenuate(self, previous_bundle, new_bundle):
 		prev_inters = previous_bundle.get_vertices(new_bundle.get_parents())
 		inters = new_bundle.get_vertices()
-		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
+		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))*self._scaling
 		energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
 		new_bundle.set_energy(energy)
 
@@ -878,7 +899,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	'''
 
-	def __init__(self, material_1, material_2, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, single_ray=True, sigma=None, scaling=1.):
 		"""
 		Arguments:
 		material_1, material_2 - Material classes from the optical_constants module.
@@ -886,6 +907,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
+		Absorbant.__init__(self, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -895,7 +917,12 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 		# get ray data:
 		directions, wavelengths, m1, energy = self._get_ray_data(rays, selector)
 		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
-		outg = reflected_rays + refracted_rays
+		if reflected_rays is None:
+			outg = refracted_rays
+		elif refracted_rays is None:
+			outg = reflected_rays
+		else:
+			outg = reflected_rays + refracted_rays
 		'''# Compute attenuation in current medium:
 		prev_inters = rays.get_vertices(outg.get_parents())
 		inters = outg.get_vertices()
@@ -909,7 +936,7 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 class Scattering(object):
 
 	def __init__(self, s_c1, s_c2, g_HG_1, g_HG_2):
-		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictats alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
+		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictates alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
 		self.phase_functions = [Henyey_Greenstein(g_HG_1), Henyey_Greenstein(g_HG_2)]
 
 	def get_media(self, current_s_c):
@@ -928,15 +955,20 @@ class Scattering(object):
 		return N.where(current_s_c == self._s_cs[0],
 					   self._s_cs[1], self._s_cs[0])
 
-	def _scatter(self, rays, selector, inters):
+	def _scatter(self, rays, selector, inters, keep_path_lengths=False):
 		# Check for scattering
 		prev_inters = rays.get_vertices(selector)
 		intersection_path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
 		s_cs = rays.get_scat_coeff(selector)
-
 		# Determine which ray gets scattered:
-		scat, scattered_path_lengths = optics.scattering(s_cs, intersection_path_lengths)
+		scat_output = optics.scattering(s_cs, intersection_path_lengths, keep_path_lengths)
+		if not keep_path_lengths:
+			scat, scattered_path_lengths = scat_output
+		else:
+			scat, scattered_path_lengths, self.to_scatter = scat_output
+
 		return scat, scattered_path_lengths, prev_inters
+
 
 	def _get_scattering_directions(self, scat, media):
 
@@ -965,14 +997,14 @@ class Scattering(object):
 									  parents=selector[scat])
 		return scattered_rays
 
-	def _make_scattering_bundle(self, rays, selector, inters, directions):
+	def _make_scattering_bundle(self, rays, selector, inters, directions, keep_path_lengths=False):
 		'''
 
 		:return: a tuple containing the scattered bundle, the boolean index array of non-scattered rays in the selected ray-properties data and the scattering coefficients of the full selected bundle.
 
 		'''
 		# scatter:
-		scat, scattered_path_lengths, prev_inters = self._scatter(rays, selector, inters)
+		scat, scattered_path_lengths, prev_inters = self._scatter(rays, selector, inters, keep_path_lengths)
 		# Make output bundle
 		if scat.any():
 			return self._make_output_scattering_bundles(prev_inters, scat, scattered_path_lengths, directions,
@@ -1001,14 +1033,18 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 		# set original outgoing energy to 0
 		inters = geometry.get_intersection_points_global()
 		directions = rays.get_directions(selector)
-		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions, keep_path_lengths=True)
+		# if we have nonscattered rays hitting a periodic bc, we need to alter the scattering coefficients in the next bundle to be complex and have their imaginary part the remaining path length to scattering
 		# if any ray is not scattered:
 		if nonscat.any():
+			# We add existing path lengths of non-scattered as a imaginary part in scattering coefficient.
+			new_s_cs = rays.get_scat_coeff(selector[nonscat]) + self.to_scatter[nonscat] * 1j
 			outg = rays.inherit(selector[nonscat],
 								vertices=inters[:,nonscat],
 								energy=N.zeros(len(selector[nonscat])),
 								direction=directions[:,nonscat],
-								parents=selector[nonscat])
+								parents=selector[nonscat],
+								scat_coeff=new_s_cs)
 			# If the bundle is polychromatic, also get and cancel the spectra
 			if rays.has_property('spectra'):
 				spectra = rays.get_spectra(selector[nonscat])
@@ -1028,65 +1064,18 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 			return scattered_rays+outg
 
 class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant):
-	def __init__(self, period, sc, g_HG, material):
+	def __init__(self, period, sc, g_HG, material, scaling=1.):
 		self.material = material
 		ScatteringPeriodicBoundary.__init__(self, period, sc, g_HG)
+		Absorbant.__init__(self, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
-		inters = geometry.get_intersection_points_global()
-		directions = rays.get_directions(selector)
-		scattered_rays, nonscat = self._make_scattering_bundle(rays, selector, inters, directions)
+		outg = ScatteringPeriodicBoundary.__call__(self, geometry, rays, selector)
 
-		# if any ray is not scattered:
-		hits = nonscat.any()
-		scat = scattered_rays is not None
-		'''
-		if scat:
-			# Attenuate ray energy:
-			wavelengths = rays.get_wavelengths(selector[~nonscat])
-			path_lengths = N.sqrt(N.sum((scattered_rays.get_vertices() - rays.get_vertices(selector[~nonscat])) ** 2, axis=0))
-			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
-										 lambda_0=wavelengths, energy=rays.get_energy(selector[~nonscat]))
-			scattered_rays.set_energy(energy)
-		'''
-		# if all rays are scattered
-		if ~hits:
-			outg = scattered_rays
-		if hits:
-			outg = rays.inherit(selector[nonscat],
-								energy=N.zeros(len(selector[nonscat])),
-								parents=selector[nonscat])
-			# If the bundle is polychromatic, also get and cancel the spectra
-			if rays.has_property('spectra'):
-				spectra = rays.get_spectra(selector[nonscat])
-				outg._spectra = N.zeros(spectra.shape)
-
-			# Create new bundle with the updated positions and all remaining properties identical:
-
-			# Attenuate ray energy:
-			'''
-			wavelengths = rays.get_wavelengths(selector[nonscat])
-			path_lengths = N.sqrt(
-				N.sum((inters[:,nonscat] - rays.get_vertices(selector[nonscat])) ** 2, axis=0))
-			energy = optics.attenuations(path_lengths=path_lengths, k=self.material.m(wavelengths).imag,
-										 lambda_0=wavelengths, energy=rays.get_energy(selector[nonscat]))
-			
-			outg2 = rays.inherit(selector[nonscat],
-								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
-								 energy=energy,
-								 parents=selector[nonscat])
-			'''
-			outg2 = rays.inherit(selector[nonscat],
-								 vertices=inters[:, nonscat] + self.period * geometry.get_normals()[:, nonscat],
-								 parents=selector[nonscat])
-			# concatenate both bundles in one outgoing one
-			outg = outg + outg2
-			if scat:
-				outg = scattered_rays + outg
-
-			self.attenuate(rays, outg)
+		# Attenuate ray energy:
+		self.attenuate(rays, outg)
 		return outg
 
 
@@ -1155,8 +1144,10 @@ class RefractiveScattering(Refractive, Scattering):
 		return output_bundle
 
 class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None, scaling=1.):
 		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
+		Absorbant.__init__(self, scaling)
+
 
 	def __call__(self, geometry, rays, selector):
 		out_rays = super().__call__(geometry, rays, selector)
@@ -1203,7 +1194,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 	where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	There is WIP to add this small efect in the optics module.
 	'''
-	def __init__(self, m1, m2, single_ray=True, sigma=None):
+	def __init__(self, m1, m2, single_ray=True, sigma=None, scaling=1.):
 		"""
 		Arguments:
 		m1, m2 - scalars representing the homogenous complex refractive index on each
@@ -1216,7 +1207,7 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 		RefractiveHomogenous.__init__(self, m1, m2, single_ray, sigma)
 
 	def __call__(self, geometry, rays, selector):
-		return RefractiveAbsorbant.__call__(self, geometry, rays, selector)
+		return RefractiveAbsorbant.__call__(self, geometry, rays, selector, scaling=scaling)
 
 class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	'''

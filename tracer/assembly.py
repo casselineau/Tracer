@@ -30,7 +30,7 @@ class Assembly(HasFrame):
 		if subassemblies is None:
 			subassemblies = []
 		self._assemblies = subassemblies
-		
+
 		HasFrame.__init__(self, location, rotation)
 
 	def global_to_local(self, points):
@@ -141,9 +141,10 @@ class Assembly(HasFrame):
 			current assembly
 		"""
 		const_t = self.get_transform()
+
 		for obj in self._assemblies + self._objects:
 			obj.transform_children(N.dot(assembly_transform, const_t))
-			
+
 	def reset_all_optics(self):
 		for s in self.get_surfaces():
 			if hasattr(s.get_optics_manager(), 'reset'):
@@ -154,8 +155,8 @@ class Assembly(HasFrame):
 		n0 = coin.SoSeparator()
 		n = self.get_scene_graph_transform()
 
-		for obj in self._assemblies:
-			n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax, bounding_boxes))
+		for asm in self._assemblies:
+			n.addChild(asm.get_scene_graph(resolution, fluxmap, trans, vmin, vmax, bounding_boxes))
 
 		boundaries = []
 		for obj in self._objects:
