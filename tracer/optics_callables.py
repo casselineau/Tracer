@@ -1752,6 +1752,120 @@ class BiFacial(object):
 		except:
 			pass
 
+
+class SemiTransparent(object):
+	"""
+	Semi-transparent surface with absorption, reflection and transmission.
+
+	Inputs:
+	transparency              : fraction/probability transmitted (T)
+	absorptivity              : fraction/probability absorbed (A)
+	specularity_reflected     : probability that reflected rays are specular (else lambertian)
+	specularity_transmitted   : probability that transmitted rays are specular (else lambertian)
+
+	Notes:
+	- Reflected fraction is what is not transmitted or absorbed: R = 1 - T - A.
+	- Lambertian is assumed for the non-specular portion.
+	- For transmitted specular rays: "nothing happens" (direction unchanged).
+	- Implemented as a Monte-Carlo single-ray decision per incident ray to keep
+	  output bundle length == len(selector).
+	"""
+	def __init__(self,
+				 transparency=0.0,
+				 absorptivity=0.0,
+				 specularity_reflected=0.0,
+				 specularity_transmitted=1.0):
+
+		self.transparency = float(transparency)
+		self.absorptivity = float(absorptivity)
+		self.spec_r = float(specularity_reflected)
+		self.spec_t = float(specularity_transmitted)
+
+		if self.transparency < 0 or self.absorptivity < 0:
+			raise ValueError("transparency and absorptivity must be >= 0.")
+		if self.spec_r < 0 or self.spec_r > 1 or self.spec_t < 0 or self.spec_t > 1:
+			raise ValueError("specularity_reflected and specularity_transmitted must be in [0, 1].")
+		if self.transparency + self.absorptivity > 1.0:
+			raise ValueError("transparency + absorptivity must be <= 1 (reflected is the remainder).")
+
+	def __call__(self, geometry, rays, selector):
+		if len(selector) == 0:
+			return RayBundle().empty_bund()
+
+		inters = geometry.get_intersection_points_global()
+		normals = geometry.get_normals()              # (3, n)
+		in_dirs = rays.get_directions(selector)       # (3, n)
+		ener_in = rays.get_energy(selector)           # (n,)
+
+		n = len(selector)
+		ener_out = ener_in.copy()
+		out_dirs = in_dirs.copy()
+
+		A = self.absorptivity
+		T = self.transparency
+		# R = 1 - A - T  (implicit remainder)
+
+		u = N.random.rand(n)
+		absorbed = u < A
+		transmitted = (u >= A) & (u < (A + T))
+		reflected = ~(absorbed | transmitted)
+
+		# Absorbed: Set energy to zero
+		ener_out[absorbed] = 0.0
+
+		# Reflected: specular or lambertian about +normal
+		if reflected.any():
+			idx = N.nonzero(reflected)[0]
+			spec = N.random.rand(len(idx)) < self.spec_r
+
+			# Specular reflection
+			if spec.any():
+				i_spec = idx[spec]
+				out_dirs[:, i_spec] = optics.reflections(in_dirs[:, i_spec], normals[:, i_spec])
+
+			# Diffuse (Lambertian) reflection
+			if (~spec).any():
+				i_diff = idx[~spec]
+				d = sources.pillbox_sunshape_directions(len(i_diff), ang_range=N.pi/2.)
+				out_dirs[:, i_diff] = N.sum(
+					rotation_to_z(normals[:, i_diff].T) * d.T[:, None, :],
+					axis=2
+				).T
+
+		# Transmitted: specular (unchanged) or lambertian about -normal (through-surface hemisphere)
+		if transmitted.any():
+			idx = N.nonzero(transmitted)[0]
+			spec = N.random.rand(len(idx)) < self.spec_t
+
+			# Specular transmission: nothing happens (keep in_dirs)
+			# out_dirs already equals in_dirs by default.
+
+			# Diffuse transmission
+			if (~spec).any():
+				i_diff = idx[~spec]
+				d = sources.pillbox_sunshape_directions(len(i_diff), ang_range=N.pi/2.)
+				out_dirs[:, i_diff] = N.sum(
+					rotation_to_z((-normals[:, i_diff]).T) * d.T[:, None, :],
+					axis=2
+				).T
+
+		outg = rays.inherit(
+			selector,
+			vertices=inters,
+			direction=out_dirs,
+			energy=ener_out,
+			parents=selector
+		)
+
+		# If polychromatic/spectral rays carry spectra, zero it for absorbed events.
+		if outg.has_property('spectra') and absorbed.any():
+			# outg._spectra shape is typically (n_lambda, n_rays) for selected rays
+			outg._spectra[:, absorbed] = 0.0
+
+		return outg
+
+
+
 # This stuff automatically generates the classes from optical callables using the relevant Accountants.
 '''
 def subclass_from_name(name, parent, optics_class):
