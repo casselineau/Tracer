@@ -173,7 +173,7 @@ class Reflective_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
-		directions = rays.get_directions(slector)
+		directions = rays.get_directions(selector)
 		vertical = N.sum(directions*normals, axis=0)*normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
 		outg = rays.inherit(selector,
@@ -1751,6 +1751,9 @@ class BiFacial(object):
 			self.OpticsCallable_back.reset(self)
 		except:
 			pass
+
+
+
 
 # This stuff automatically generates the classes from optical callables using the relevant Accountants.
 '''
