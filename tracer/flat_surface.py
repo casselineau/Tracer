@@ -390,7 +390,7 @@ class PerforatedRectPlateGM(RectPlateGM):
 		As the surface is picewise defined, the mesh returns a series of arrays.
 		"""
 		if resolution == None:
-			resolution = 100
+			resolution = 16*4+1
 
 		xs, ys = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], resolution+1), N.linspace(-self._half_dims[1,0], self._half_dims[1,0], resolution+1)
 		X, Y = N.broadcast_arrays(xs[:, None], ys)
