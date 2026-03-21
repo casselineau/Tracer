@@ -16,7 +16,7 @@ class Estimator(object):
 		self.p += self.weight
 
 	def get_CI(self):
-		# Returns the conficence interval value in relative terms ie. dicvided by the current estimation value.
+		# Returns the confidence interval value in relative terms ie. divided by the current estimation value.
 		stdev = self.get_stdev()
 		CI = N.array(self.n_sigmas*stdev/self.value)
 		CI[stdev==0.] = 0.

@@ -205,7 +205,7 @@ def attenuations(path_lengths, k, lambda_0, energy):
 	Calculates energy attenuation from the wavelength in vacuum (lambda 0), the absorption index (complex part of the complex refractive index, k) and the path length.
 	
 	'''
-	T = N.exp(-4.*N.pi*k/lambda_0*path_lengths)
+	T = N.exp(-4.*N.pi*path_lengths*k/lambda_0)
 	energy = T*energy
 	return energy
 	
