@@ -199,7 +199,7 @@ class RectPlateGM(FiniteFlatGM):
 		self._half_dims = N.c_[[width, height]]/2.
 
 		FiniteFlatGM.__init__(self)
-		
+
 	def find_intersections(self, frame, ray_bundle):
 		"""
 		Extends the parent flat geometry manager by discarding in advance
@@ -478,7 +478,7 @@ class RoundPlateGM(FiniteFlatGM):
 		self._Ri = Ri	   
 		self._Re = Re
 		FiniteFlatGM.__init__(self)
-	
+
 	def find_intersections(self, frame, ray_bundle):
 		"""
 		Extends the parent flat geometry manager by discarding in advance

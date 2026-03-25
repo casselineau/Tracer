@@ -127,6 +127,42 @@ class Reflective(object):
 
 		return outg
 
+
+class Lambertian(object):
+	"""
+	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
+	that reflects rays in a random direction (uniform distribution of
+	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
+	"""
+
+	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
+		self._abs = absorptivity
+		self._ang_range = ang_range
+
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=self._ang_range)
+		normals = geometry.get_normals()
+		directs = N.sum(rotation_to_z(normals.T) * directs.T[:, None, :], axis=2).T
+
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							energy=rays.get_energy(selector) * (1. - self._abs),
+							direction=directs,
+							parents=selector)
+
+		if outg.has_property('spectra'):
+			outg._spectra *= (1. - self._abs)
+
+		return outg
+
 class Reflective_spectral(object):
 	def __init__(self, absorptances, wavelengths):
 		self._wavelengths = wavelengths
@@ -163,111 +199,121 @@ class OneSidedReflective(Reflective):
 		outg.set_energy(energy)
 		return outg
 
-class Reflective_IAM(object):
+class RealReflective(object):
+	'''
+	Generates a function that represents the optics of an opaque absorptive surface with specular reflections and realistic surface slope error. The surface slope error is considered equal in both x and y directions. The consequent distribution of standard deviation is described by a radial bivariate normal distribution law.
+
+	Arguments:
+	absorptivity - the amount of energy absorbed before reflection
+	sigma - Standard deviation of the reflected ray in the local x and y directions.
+
+	Returns:
+	Reflective - a function with the signature required by surface
+	'''
+
+	def __init__(self, absorptivity, sigma, bi_var=False):
+		self._abs = absorptivity
+		self._sig = sigma
+		self.bi_var = bi_var
+
+	def __call__(self, geometry, rays, selector):
+		ideal_normals = geometry.get_normals()
+
+		if self._sig > 0.:
+			if self.bi_var == True:
+				# Creates projection of error_normal on the surface (sin can be avoided because of very small angles).
+				tanx = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+				tany = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+
+				normal_errors_z = (1. / (1. + tanx ** 2. + tany ** 2.)) ** 0.5
+				normal_errors_x = tanx * normal_errors_z
+				normal_errors_y = tany * normal_errors_z
+
+			else:
+				th = N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1]))
+				phi = N.random.uniform(low=0., high=2. * N.pi, size=N.shape(ideal_normals[1]))
+				normal_errors_z = N.cos(th)
+				normal_errors_x = N.sin(th) * N.cos(phi)
+				normal_errors_y = N.sin(th) * N.sin(phi)
+
+			normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
+
+			# Determine rotation matrices for each normal:
+			real_normals = rotate_z_to_normal(normal_errors, ideal_normals)
+			real_normals = real_normals / N.sqrt(N.sum(real_normals ** 2, axis=0))
+		else:
+			real_normals = ideal_normals
+		# Call reflective optics with the new set of normals to get reflections affected by
+		# shape error.
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							direction=optics.reflections(rays.get_directions(selector), real_normals),
+							energy=rays.get_energy(selector) * (1 - self._abs),
+							parents=selector)
+
+		if outg.has_property('spectra'):
+			outg._spectra *= (1. - self._abs)
+
+		return outg
+
+class IAM(object):
+	def __init__(self, a_r, c=1):
+		self.a_r = a_r
+		self.c = c
+
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions(selector)
+		vertical = N.sum(directions * normals, axis=0) * normals
+		cos_theta_AOI = N.sqrt(N.sum(vertical ** 2, axis=0))
+		return rays.get_energy(selector)*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
+
+class Reflective_IAM(Reflective, IAM):
 	'''
 	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
-	def __init__(self, absorptivity, a_r):
+	def __init__(self, absorptivity, a_r, c=1):
 		self._abs = absorptivity
 		self.a_r = a_r
+		Reflective.__init__(self, absorptivity)
+		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(slector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
+		outg = Reflective(self, geometry, rays, selector)
+		reflected = IAM.__call__(self , geometry, rays, selector)
+		outg.set_energy(reflected)
+		'''if outg.has_property('spectra'):
+			outg._spectra *= dir_ref'''
 
 		return outg
 
-class Reflective_mod_IAM(object):
-	'''
-	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
-	'''
-	def __init__(self, absorptivity, a_r, c):
-		self._abs = absorptivity
-		self.a_r = a_r
-		self.c = c
-	
-	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
-		return outg
-
-
-class Lambertian_IAM(object):
+class Lambertian_IAM(Lambertian, IAM):
 	'''
 	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
-	def __init__(self, absorptivity, a_r):
-		self._abs = absorptivity
-		self.a_r = a_r
+	def __init__(self, absorptivity, a_r, c=1):
+		Lambertian.__init__(self, absorptivity)
+		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
+		outg = Lambertian.__call__(self, geometry, rays, selector)
+		reflected = IAM.__call__(self, geometry, rays, selector)
+		outg.set_energy(reflected)
 
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
-
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=directs,
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
+		'''if outg.has_property('spectra'):
 			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
+		'''
 		return outg
 
-class Lambertian_mod_IAM(object):
-	'''
-	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
-	'''
-	def __init__(self, absorptivity, a_r, c):
-		self._abs = absorptivity
-		self.a_r = a_r
-		self.c = c
-	
+class RealReflective_IAM(RealReflective, IAM):
+	def __init__(self, absorptivity, a_r, sigma, bi_var=False):
+		RealReflective.__init__(self, absorptivity, sigma, bi_var)
+		IAM.__init__(self, a_r)
+
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
-
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=directs,
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
+		outg = RealReflective.__call__(self, geometry, rays, selector)
+		reflected = IAM.__call__(self, geometry, rays, selector)
+		outg.set_energy(reflected)
 		return outg
 
 class Lambertian_directional_axisymmetric_piecewise(object):
@@ -430,61 +476,6 @@ class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(object):
 
 perfect_mirror = Reflective(0)
 
-class RealReflective(object):
-	'''
-	Generates a function that represents the optics of an opaque absorptive surface with specular reflections and realistic surface slope error. The surface slope error is considered equal in both x and y directions. The consequent distribution of standard deviation is described by a radial bivariate normal distribution law.
-
-	Arguments:
-	absorptivity - the amount of energy absorbed before reflection
-	sigma - Standard deviation of the reflected ray in the local x and y directions. 
-	
-	Returns:
-	Reflective - a function with the signature required by surface
-	'''
-	def __init__(self, absorptivity, sigma, bi_var=True):
-		self._abs = absorptivity
-		self._sig = sigma
-		self.bi_var = bi_var
-
-	def __call__(self, geometry, rays, selector):
-		ideal_normals = geometry.get_normals()
-
-		if self._sig > 0.:
-			if self.bi_var == True:
-				# Creates projection of error_normal on the surface (sin can be avoided because of very small angles).
-				tanx = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-				tany = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-
-				normal_errors_z = (1./(1.+tanx**2.+tany**2.))**0.5
-				normal_errors_x = tanx*normal_errors_z
-				normal_errors_y = tany*normal_errors_z
-
-			else:
-				th = N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1]))
-				phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(ideal_normals[1]))
-				normal_errors_z = N.cos(th)
-				normal_errors_x = N.sin(th)*N.cos(phi)
-				normal_errors_y = N.sin(th)*N.sin(phi)
-
-			normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
-
-			# Determine rotation matrices for each normal:
-			real_normals = rotate_z_to_normal(normal_errors, ideal_normals)
-			real_normals = real_normals/N.sqrt(N.sum(real_normals**2, axis=0))
-		else:
-			real_normals = ideal_normals
-		# Call reflective optics with the new set of normals to get reflections affected by 
-		# shape error.
-		outg = rays.inherit(selector,
-			vertices = geometry.get_intersection_points_global(),
-			direction = optics.reflections(rays.get_directions(selector), real_normals),
-			energy = rays.get_energy(selector)*(1 - self._abs),
-			parents = selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1.-self._abs)
-
-		return outg
 
 class OneSidedRealReflective(RealReflective):
 	"""
@@ -500,14 +491,14 @@ class OneSidedRealReflective(RealReflective):
 		outg.set_energy(energy) #substitute previous step into ray energy array
 		return outg
 
-class SemiLambertian(object):
+class SemiLambertian(Reflective, Lambertian):
 	"""
-	Represents the optics of an semi-diffuse surface, i.e. one that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
+	Represents the optics of an semi-diffuse surface, i.e. one that absorbs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
 	"""
 	def __init__(self, absorptivity=0., angular_range=N.pi/2.):
-		self._abs = absorptivity
-		self._ar = angular_range
-	
+		Reflective.__init__(self, absorptivity)
+		Lambertian.__init__(self, absorptivity, angular_range)
+
 	def __call__(self, geometry, rays, selector):
 		"""
 		Arguments:
@@ -517,14 +508,18 @@ class SemiLambertian(object):
 			surface)
 		selector - indices into ``rays`` of the hitting rays.
 		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), self._ar)
 		normals = geometry.get_normals()
 
 		in_directs = rays.get_directions()[selector]
 		angs = N.arccos(N.dot(in_directs, -normals)[2])
-		glancing = angs>self._ar
+		glancing = angs>self._ang_range
 
-		directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
+		specular = Reflective.__call__(self, geometry, rays, selector[glancing])
+		diffuse = Lambertian.__call__(self, geometry, rays, selector[~glancing])
+
+		outg = specular + diffuse
+
+		'''directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
 		directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
 	  
 		energies = rays.get_energy(selector)
@@ -538,40 +533,10 @@ class SemiLambertian(object):
 
 		if outg.has_property('spectra'):
 			outg._spectra[~glancing] *= (1.-self._abs)
+		'''
 		return outg
 
-class Lambertian(object):
-	"""
-	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
-	that reflects rays in a random direction (uniform distribution of
-	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
-	"""
-	def __init__(self, absorptivity=0.):
-		self._abs = absorptivity
-	
-	def __call__(self, geometry, rays, selector):
-		"""
-		Arguments:
-		geometry - a GeometryManager which knows about surface normals, hit
-			points etc.
-		rays - the incoming ray bundle (all of it, not just rays hitting this
-			surface)
-		selector - indices into ``rays`` of the hitting rays.
-		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		normals = geometry.get_normals()
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
 
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy(selector)*(1. - self._abs),
-			direction=directs, 
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1.-self._abs)
-
-		return outg
 
 class LambertianSpecular(object):
 	"""
