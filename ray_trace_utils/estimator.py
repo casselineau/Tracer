@@ -13,16 +13,15 @@ class Estimator(object):
 		self.relative_CI = relative_CI
 
 	def update(self, values, num_samples):
-		batch_total = N.sum(values, axis=-1)
-		delta = batch_total - self.mean
+		delta = values - self.mean
 		if self.n == 0.:
 			self.n += num_samples
 			self.mean = num_samples * delta / self.n
-			self.M2 = num_samples * delta * (batch_total - self.mean)
+			self.M2 = num_samples * delta * (values - self.mean)
 		else:
 			self.n += num_samples
 			self.mean += num_samples * delta / self.n
-			self.M2 += num_samples * delta * (batch_total - self.mean)
+			self.M2 += num_samples * delta * (values - self.mean)
 		self.n2 += num_samples**2.
 
 	def get_CI(self):
