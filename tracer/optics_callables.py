@@ -469,23 +469,15 @@ class RealReflective(object):
 			normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
 
 			# Determine rotation matrices for each normal:
-			rots_norms = rotation_to_z(ideal_normals.T)
-			if rots_norms.ndim==2:
-				rots_norms = [rots_norms]
-
-			# Build the normal_error vectors in the local frame.
-			real_normals = N.zeros(N.shape(ideal_normals))
-			for i in range(N.shape(real_normals)[1]):
-				real_normals[:,i] = N.dot(rots_norms[i], normal_errors[:,i])
-
-			real_normals_unit = real_normals/N.sqrt(N.sum(real_normals**2, axis=0))
+			real_normals = rotate_z_to_normal(normal_errors, ideal_normals)
+			real_normals = real_normals/N.sqrt(N.sum(real_normals**2, axis=0))
 		else:
-			real_normals_unit = ideal_normals
+			real_normals = ideal_normals
 		# Call reflective optics with the new set of normals to get reflections affected by 
 		# shape error.
 		outg = rays.inherit(selector,
 			vertices = geometry.get_intersection_points_global(),
-			direction = optics.reflections(rays.get_directions(selector), real_normals_unit),
+			direction = optics.reflections(rays.get_directions(selector), real_normals),
 			energy = rays.get_energy(selector)*(1 - self._abs),
 			parents = selector)
 
@@ -1573,6 +1565,10 @@ class Accountant(ABC):
 		return
 
 class LocationAccountant(Accountant):
+	"""
+	This optics manager remembers all of the locations where rays hit it
+	in all iterations.
+	"""
 	def __init__(self):
 		super().__init__()
 		self.shorthand = 'Location'
@@ -1598,8 +1594,8 @@ class LocationAccountant(Accountant):
 
 class AbsorptionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the absorbed energies
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1619,8 +1615,8 @@ class AbsorptionAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
+		the energy absorbed by each hit-point
+
 		"""
 		if not len(self._absorbed):
 			return N.array([])
@@ -1629,8 +1625,8 @@ class AbsorptionAccountant(Accountant):
 
 class ReceptionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the incident energies if ray hits in
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1649,8 +1645,7 @@ class ReceptionAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
+		the energy incident at each hit-point
 		"""
 		if not len(self._received):
 			return N.array([])
@@ -1659,7 +1654,7 @@ class ReceptionAccountant(Accountant):
 
 class ScatteringAccountant(Accountant):
 	'''
-	in all iterations, and the energy that was scattered (here understood as not absorbed) for each ray.
+	In all iterations, stores the energy that was scattered (here understood as not absorbed) for each ray.
 	'''
 	def __init__(self):
 		super().__init__()
@@ -1678,7 +1673,7 @@ class ScatteringAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 		
 		Returns:
-		_transmitted - the energy not absorbed by each hit-point
+		The energy scattered at each hit-point
 		"""
 		if not len(self._scattered):
 			return N.array([])
@@ -1687,8 +1682,8 @@ class ScatteringAccountant(Accountant):
 
 class DirectionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the incident directions where rays hit
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1718,8 +1713,8 @@ class DirectionAccountant(Accountant):
 
 class NormalAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the local normals at rays hits
+	in all iterations.
 	"""
 
 	def __init__(self):

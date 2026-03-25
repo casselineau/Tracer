@@ -22,9 +22,9 @@ class InfiniteCylinder(QuadricGM):
 		hit = N.dot(N.linalg.inv(self._working_frame), N.vstack((verts.T, N.ones(verts.shape[0]))))
 		dir_loc = N.dot(self._working_frame[:3,:3].T, dirs.T)
 		
-		# The local normal is made from the X,Y components of the vertex:
+		# The local external normal is made from the X,Y components of the vertex:
 		local_norm = N.vstack((hit[:2], N.zeros(hit.shape[1])))
-		local_norm /= N.sqrt(N.sum(hit[:2]**2, axis=0))
+		local_norm /= self._R
 
 		# Choose whether the normal is inside or outside:
 		local_norm[:, N.sum(local_norm[:2] * dir_loc[:2], axis=0) > 0.] *= -1.
