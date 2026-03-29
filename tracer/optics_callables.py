@@ -266,7 +266,7 @@ class IAM(object):
 		directions = rays.get_directions(selector)
 		vertical = N.sum(directions * normals, axis=0) * normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical ** 2, axis=0))
-		return rays.get_energy(selector)*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
+		return rays.get_energy(selector)*(1.-self._abs)*(1. -N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))
 
 class Reflective_IAM(Reflective, IAM):
 	'''
