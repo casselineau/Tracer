@@ -15,6 +15,7 @@ from ..assembly import Assembly
 from .one_sided_mirror import rect_one_sided_mirror, rect_para_one_sided_mirror, flat_quad_one_sided_mirror
 from ..spatial_geometry import rotx, roty, rotz, general_axis_rotation
 from ..object import AssembledObject
+from ..boundary_shape import BoundaryBox
 
 class RotationAxis(AssembledObject):
 	def __init__(self,  axis=None):
@@ -32,8 +33,7 @@ class HeliostatField(Assembly):
 		
 		Arguments:
 		positions - an (n,3) array, each row has the location of one heliostat.
-		width, height - The width
-		and height, respectively, of each heliostat. apsorpt - part of incident energy absorbed by the heliostat.
+		width, height - The width and height, respectively, of each heliostat. apsorpt - part of incident energy absorbed by the heliostat.
 		sigma - Heliostats surface slope error
 		bi_var - If true, the slope error is a gaussian bi-variate on x and y, if false, it is an axi-symmetrical radial gaussian error.
 		focal_lengths - the focal lengths of mirrors. If None, the mirrors are flat or quadric.
@@ -63,12 +63,13 @@ class HeliostatField(Assembly):
 			secondary_axis = RotationAxis(axis=rotation_axes_vec[1])
 
 			assert(not((focal_lengths[p] != None) and (quad_params[p] != None)))
+			bounds = BoundaryBox(N.array([[-width/2., width/2.],[-height/2., height/2.],[-1e-6, 1e-6]]).T)
 			if (focal_lengths[p] == None) and (quad_params[p] == None):
-				mirror = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option)
+				mirror = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option, bounds=bounds)
 			elif focal_lengths[p] != None: 
-				mirror = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity[p], sigma, bi_var, MCRT_option)
+				mirror = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity[p], sigma, bi_var, MCRT_option, bounds=bounds)
 			else:
-				mirror = flat_quad_one_sided_mirror(width, height, quad_params[p], absorptivity[p], sigma, bi_var, MCRT_option)
+				mirror = flat_quad_one_sided_mirror(width, height, quad_params[p], absorptivity[p], sigma, bi_var, MCRT_option, bounds=bounds)
 			mirror.set_location(axes_offset)
 			facet = Assembly(objects=[mirror, secondary_axis], location=rotation_axes_pos[0])
 			hstat = Assembly(objects=[primary_axis], subassemblies=[facet], location=positions[p])
@@ -240,7 +241,7 @@ def radial_stagger(start_ang, end_ang, az_space, rmin, rmax, r_space):
 	xs1 = N.outer(rs[::2], N.cos(angs[::2])).flatten()
 	ys1 = N.outer(rs[::2], N.sin(angs[::2])).flatten()
 	
-	# 2nd staggeer:
+	# 2nd stagger:
 	xs2 = N.outer(rs[1::2], N.cos(angs[1::2])).flatten()
 	ys2 = N.outer(rs[1::2], N.sin(angs[1::2])).flatten()
 	
