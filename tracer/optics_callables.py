@@ -724,7 +724,8 @@ class Refractive(object):
 								The ray-bundles declared need to have a starting refractive index associated to the rays.
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
-		self._materials = (material_1, material_2)
+		materials = [material_1, material_2]
+		self._materials = materials
 		self._single_ray = single_ray
 		self._sigma = sigma
 
@@ -854,7 +855,9 @@ class Absorbant(object):
 		'''
 		# if we scale the raytrace geometry to avoid floating point errors on intersections, we have to modify attenuations
 		self._scaling = scaling
-		self.a_c = N.array(attenuation_coefficients)
+		self.a_c = attenuation_coefficients
+		if self.a_c is not None:
+			self.a_c = N.array(attenuation_coefficients)
 
 	def attenuate(self, previous_bundle, new_bundle):
 		prev_inters = previous_bundle.get_vertices(new_bundle.get_parents())
@@ -1117,7 +1120,6 @@ class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
 		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
 		Absorbant.__init__(self, scaling)
 
-
 	def __call__(self, geometry, rays, selector):
 		out_rays = super().__call__(geometry, rays, selector)
 		self.attenuate(rays, out_rays)
@@ -1283,7 +1285,7 @@ class RefractiveTransmissiveHomogenous(RefractiveHomogenous, Absorbant):
 		self.attenuate(rays, out_rays)
 		return out_rays
 
-class RefractiveScatteringHomogenous(RefractiveHomogenous):
+class RefractiveScatteringHomogenous(RefractiveHomogenous, Scattering):
 	'''
 	Same as RefractiveHomogenous but with sacttering in the medium.
 
@@ -1303,7 +1305,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	n1, n2 - scalars representing the homogenous refractive index on each
 			side of the surface (order doesn't matter).
 	s_c1, s_c2 - Scattering coefficients of medium 1 and medium 2 in m-1
-	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
+	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scatter ing.
 	'''
 
 	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
@@ -1314,6 +1316,7 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 
 	def __call__(self, geometry, rays, selector):
 		return RefractiveScattering.__call__(self, geometry, rays, selector)
+
 	'''
 	def` toggle_media(self, current_ref_idx, current_s_c):
 		"""
@@ -1455,6 +1458,8 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 				ret_bundle = reflected_rays + refracted_rays
 		return ret_bundle
 		'''
+
+
 class FresnelConductorHomogenous(object):
 	'''
 	Fresnel equation with a conductive medium instersected. The attenuation is total in a very short range in the intersected metal and refraction is not modelled. Only strictly valid for k2 >> 1 and in situations where the refracted ray is not interacting with the scene again (eg. not traversing thin metal volumes).
