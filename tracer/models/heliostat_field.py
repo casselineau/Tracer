@@ -48,9 +48,9 @@ class HeliostatField(Assembly):
 		self._pos = positions
 		#face_down = rotx(N.pi)[:3,:3]
 
-		if focal_lengths==None:
+		if focal_lengths is None:
 			focal_lengths = [None]*positions.shape[0]
-		if quad_params==None:
+		if quad_params is None:
 			quad_params = [None]*positions.shape[0]
 		if not(hasattr(absorptivity, '__len__')):
 			absorptivity = N.ones(positions.shape[0])*absorptivity
