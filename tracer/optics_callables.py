@@ -1074,11 +1074,11 @@ class RefractiveScattering(Refractive, Scattering):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
 
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray=True, sigma=None):
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
 		self._s_cs = [s_c1, s_c2]  #
 		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
-		Scattering.__init__(self, s_c1, s_c2, 0., g_HG)
+		Scattering.__init__(self, s_c1, s_c2, g_HG_1, g_HG_2)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -1116,8 +1116,8 @@ class RefractiveScattering(Refractive, Scattering):
 		return output_bundle
 
 class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None, scaling=1.):
-		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray=True, sigma=None, scaling=1.):
+		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray, sigma)
 		Absorbant.__init__(self, scaling)
 
 	def __call__(self, geometry, rays, selector):
@@ -1308,11 +1308,9 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous, Scattering):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scatter ing.
 	'''
 
-	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, n1, n2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray=True, sigma=None):
 		RefractiveHomogenous.__init__(self, n1, n2, single_ray, sigma)
-
-		self._s_cs = [s_c1, s_c2]  #
-		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
+		Scattering.__init__(self, s_c1, s_c2, g_HG_1, g_HG_2)
 
 	def __call__(self, geometry, rays, selector):
 		return RefractiveScattering.__call__(self, geometry, rays, selector)
