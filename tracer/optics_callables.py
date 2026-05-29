@@ -876,21 +876,25 @@ class Absorbant(object):
 			energy = new_bundle.get_energy()*N.exp(-a_c*path_lengths)
 		new_bundle.set_energy(energy)
 
-	def get_attenuations(self, previous_bundle, new_bundle):
-		return new_bundle.get_energy()-previous_bundle.get_energy()
-
 class LambertianAbsorbant(Lambertian, Absorbant):
 	'''
 	Optics of an opaque surface at the boundary of an absorbing volume.
 	'''
-	def __init__(self, absorptivity=0.,  attenuation_coefficient=0., ang_range=N.pi/2., scaling=1.):
-		Lambertian.__init__(self, absorptivity, ang_range)
+	def __init__(self, absorptivity=0., attenuation_coefficient=0., ang_range=N.pi/2., scaling=1.):
+		self._absorptivity=absorptivity
+		Lambertian.__init__(self, absorptivity=1., ang_range) # this makes differentiating between attenuationa nd absorption easier.
 		Absorbant.__init__(self, attenuation_coefficient, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		outg = Lambertian.__call__(self, geometry, rays, selector)
 		self.attenuate(rays, outg)
+		incident_ener = outg.get_energy()
+		self.attenuations = incident_ener - rays.get_energy()
+		outg.set_energy(incident_ener*(1.-self._absorptivity))
 		return outg
+
+	def get_attenuations(self):
+		return self.attenuations
 
 class RefractiveAbsorbant(Refractive, Absorbant):
 	'''
@@ -1655,7 +1659,7 @@ class AttenuationAccountant(Accountant):
 		self._attenuated = []
 
 	def count(self, geometry, rays, selector, new_bundle):
-		self._attenuated.append(self.get_attenuations(rays, new_bundle))
+		self._attenuated.append(self.get_attenuations())
 
 	def get_data(self):
 		"""
