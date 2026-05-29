@@ -198,7 +198,7 @@ def refr_idx_hartmann(wavelength, a, b, c, d, e):
 	
 	where L is the wavelength.
 	"""
-	return a + b/(c - wavelength) 
+	return a + b/(c - wavelength) + d/(e - wavelength)
 
 def attenuations(path_lengths, k, lambda_0, energy):
 	'''
@@ -213,15 +213,15 @@ def scattering(sigma, intersection_path_lengths, keep_path_lengths=False):
 	'''
 	Calculates randomly distributed scattereing path lengths for homogenous medium based on a scattering coefficient.
 	Arguments:
-	- sigma: scattering coefficient (m-1) if imaginary, the imag is the remaining distance to scattering because we have determined it earlier with a periodic BC
+	- sigma: scattering coefficient (m-1). If imaginary, the imag is the remaining distance to scattering because we have determined it earlier with a periodic BC
 	Returns:
 	 - boolean scattered, not scattered array
-	 - Uniformly sampled path lengths to scattering event fro scattered rays
+	 - Uniformly sampled path lengths to scattering event for scattered rays
 	'''
 
 	realsig = N.isrealobj(sigma)
 	if not realsig:
-		path_lengths_left = sigma.imag
+		path_lengths_left = sigma.imag # path length left to check scattering from a previous random number generation
 		sigma = sigma.real
 	R = N.random.uniform(size=len(intersection_path_lengths))
 	scattered_path_lengths = -N.log(R)/sigma
