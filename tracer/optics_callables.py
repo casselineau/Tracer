@@ -2039,7 +2039,7 @@ accountants = []
 # TODO: decide this, split spectral and polychromatic, associate polychromatic with energy processing and change order decided so far.
 # Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
 # Within each category, do alphabetical
-accountant_types = ['Absorption', 'Reception', 'Scattering', 'Attenuation', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
+accountant_types = ['Absorption', 'Attenuation', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
 for at in accountant_types:
 	accountants.extend([a for a in accountants_raw if at in a.__name__])
 # Aliases to make declaration easier for common accountants and ensure backward compatibility
