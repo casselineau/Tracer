@@ -13,11 +13,12 @@ from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
 from abc import ABC, abstractmethod
 from itertools import combinations
+import copy
 
 import sys, inspect
 
 '''
-#TODO:
+#TODO: THIS NEEDS TO BE REVIEWED, A lot has been done already.
 
 Refraction callables: unify fixed index and wavelength dependent callables, subclass more efficiently for scattering and attenuation and simplify output code.
 
@@ -76,8 +77,19 @@ How to do this:
  	- energy: attenuation, reflection, absorption, make them compatible with array operations for spectral and polychromatic operations
  	- normals: add error to normal vectors
  	- directions: specular reflections, refraction, bxdf sampling
-- Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls. 
+- Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls.
+
+Optical manager lock to automaticlaly prevent issues with a single optical manager assigned to more than two surfaces. 
 '''
+def copy_optical_manager(opt):
+	'''
+	To easily make copies of teh same setup for several objects
+	'''
+	newopt = copy(opt)
+	if hasattr(newopt, 'reset'):
+		newopt.reset()
+	return newopt
+
 class Transparent(object):
 	"""
 	Generates a function that simply intercepts rays but does not change any of their properties.
@@ -882,7 +894,7 @@ class LambertianAbsorbant(Lambertian, Absorbant):
 	'''
 	def __init__(self, absorptivity=0., attenuation_coefficient=0., ang_range=N.pi/2., scaling=1.):
 		self._absorptivity=absorptivity
-		Lambertian.__init__(self, absorptivity=1., ang_range) # this makes differentiating between attenuationa nd absorption easier.
+		Lambertian.__init__(self, absorptivity=1., ang_range=ang_range) # this makes differentiating between attenuationa nd absorption easier.
 		Absorbant.__init__(self, attenuation_coefficient, scaling)
 
 	def __call__(self, geometry, rays, selector):

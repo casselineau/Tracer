@@ -5,6 +5,8 @@
 # [2] http://en.wikipedia.org/wiki/Snell%27s_law
 # [3] Warren J. Smith, Modern Optical Engineering, 4th Ed., 2008; p. 208.
 
+
+
 import numpy as N
 import logging
 
