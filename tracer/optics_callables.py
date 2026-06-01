@@ -13,7 +13,7 @@ from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
 from abc import ABC, abstractmethod
 from itertools import combinations
-import copy
+from copy import copy
 
 import sys, inspect
 
