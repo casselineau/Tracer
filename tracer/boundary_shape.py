@@ -53,6 +53,7 @@ class BoundaryShape(HasFrame):
 		raise TypeError("Virtual bounding_rect_for_plane() called. " + \
 			"Implement this in a derived class")
 
+
 class BoundaryBox(BoundaryShape):
 	def __init__(self, aabb, location=None, rotation=None):
 		"""
@@ -66,24 +67,24 @@ class BoundaryBox(BoundaryShape):
 	def update_AABB(self):
 		minx, miny, minz = self._aabb[0]
 		maxx, maxy, maxz = self._aabb[1]
-		fullbox = N.zeros((8, 3))
+		fullbox = N.ones((8, 4))
 		fullbox[::2,0] = minx
 		fullbox[1::2,0] = maxx
 		fullbox[:,1] = miny
 		fullbox[[2,3,6,7],1] = maxy
 		fullbox[:4,2] = minz
 		fullbox[4:,2] = maxz
-		fullbox = N.dot(self._temp_frame, N.concatenate((fullbox, N.ones((8,1))), axis=1).T)[:-1]
+		fullbox = N.dot(self._temp_frame, fullbox.T)[:3]
 		self._minpoint, self._maxpoint = N.array(AABB(fullbox))
 		self._AABB = N.array([self._minpoint, self._maxpoint])
-		
-	def transform_frame(self, transform):
-		BoundaryShape.transform_frame(self, transform)
-		self.update_AABB()
-		
+
 	def in_bounds(self, bund_vertices):
 		# test intersection of vertices with AABB in global coordinates
 		return N.logical_and(bund_vertices>self._minpoint, bund_vertices<self._maxpoint).all(axis=0)
+
+	def transform_frame(self, transform):
+		BoundaryShape.transform_frame(self, transform)
+		self.update_AABB()
 
 class BoundarySphere(BoundaryShape):
 	def __init__(self, location=None,  radius=1.):

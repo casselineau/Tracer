@@ -49,7 +49,7 @@ class TracerEngine():
 				if rays_rel.all():
 					in_rays = bundle
 				else: # ...Otherwise, the bundle inherits the relevant only
-					in_rays = bundle.inherit(rays_rel)   
+					in_rays = bundle.inherit(rays_rel)
 			else: # if not a relevant surface for intersection, next surface:
 				continue
 				
@@ -70,7 +70,7 @@ class TracerEngine():
 		Arguments:
 		bundle - the RayBundle instance holding incoming rays.
 		surfaces - the list of surfaces in the main assembly
-		surf_relevancy - a lots of nsurf elements. In each s element of this main list, a list of nseqs elements describing sequential ray intersection tests. In each seq element of that list, the indices of the rays that shoudl be intersected.
+		surf_relevancy - a list of nsurf elements. In each s element of this main list, a list of nseqs elements describing sequential ray intersection tests. In each seq element of that list, the indices of the rays that should be intersected.
 		
 		Returns:
 		earliest_surf - a nray length list with the indices of teh first surface intersected.
@@ -78,8 +78,8 @@ class TracerEngine():
 		
 		Esplaination:
 		We check, in order of intersections, all the rays that are relevant to each surface, as given in surfs-relevancy, thanks to the progressive traversal of the acceleration tree.
-		First we loop through all surfaces for first order intersection, then second order etc until no surface has rays left to simulate. After each order, ray mins are compard to find the first surface hit. 
-		If there is a hit, we prevent this ray form being registered for intersection in following iterations (this is where we should gain intersection time). 
+		First we loop through all surfaces for first order intersection, then second order etc until no surface has rays left to simulate. After each order, ray mins are compared to find the first surface hit.
+		If there is a hit, we prevent this ray from being registered for intersection in following iterations (this is where we should gain intersection time).
 		"""
 		nrays = bundle.get_num_rays()
 		rays_mins = N.ones(nrays)*N.inf

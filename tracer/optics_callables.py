@@ -13,11 +13,12 @@ from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
 from abc import ABC, abstractmethod
 from itertools import combinations
+from copy import copy
 
 import sys, inspect
 
 '''
-#TODO:
+#TODO: THIS NEEDS TO BE REVIEWED, A lot has been done already.
 
 Refraction callables: unify fixed index and wavelength dependent callables, subclass more efficiently for scattering and attenuation and simplify output code.
 
@@ -76,8 +77,19 @@ How to do this:
  	- energy: attenuation, reflection, absorption, make them compatible with array operations for spectral and polychromatic operations
  	- normals: add error to normal vectors
  	- directions: specular reflections, refraction, bxdf sampling
-- Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls. 
+- Use these functions in order to modify surface properties or energy output at the right location in the optics_callable calls.
+
+Optical manager lock to automaticlaly prevent issues with a single optical manager assigned to more than two surfaces. 
 '''
+def copy_optical_manager(opt):
+	'''
+	To easily make copies of teh same setup for several objects
+	'''
+	newopt = copy(opt)
+	if hasattr(newopt, 'reset'):
+		newopt.reset()
+	return newopt
+
 class Transparent(object):
 	"""
 	Generates a function that simply intercepts rays but does not change any of their properties.
@@ -127,6 +139,42 @@ class Reflective(object):
 
 		return outg
 
+
+class Lambertian(object):
+	"""
+	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
+	that reflects rays in a random direction (uniform distribution of
+	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
+	"""
+
+	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
+		self._abs = absorptivity
+		self._ang_range = ang_range
+
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=self._ang_range)
+		normals = geometry.get_normals()
+		directs = N.sum(rotation_to_z(normals.T) * directs.T[:, None, :], axis=2).T
+
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							energy=rays.get_energy(selector) * (1. - self._abs),
+							direction=directs,
+							parents=selector)
+
+		if outg.has_property('spectra'):
+			outg._spectra *= (1. - self._abs)
+
+		return outg
+
 class Reflective_spectral(object):
 	def __init__(self, absorptances, wavelengths):
 		self._wavelengths = wavelengths
@@ -163,111 +211,121 @@ class OneSidedReflective(Reflective):
 		outg.set_energy(energy)
 		return outg
 
-class Reflective_IAM(object):
+class RealReflective(object):
+	'''
+	Generates a function that represents the optics of an opaque absorptive surface with specular reflections and realistic surface slope error. The surface slope error is considered equal in both x and y directions. The consequent distribution of standard deviation is described by a radial bivariate normal distribution law.
+
+	Arguments:
+	absorptivity - the amount of energy absorbed before reflection
+	sigma - Standard deviation of the reflected ray in the local x and y directions.
+
+	Returns:
+	Reflective - a function with the signature required by surface
+	'''
+
+	def __init__(self, absorptivity, sigma, bi_var=False):
+		self._abs = absorptivity
+		self._sig = sigma
+		self.bi_var = bi_var
+
+	def __call__(self, geometry, rays, selector):
+		ideal_normals = geometry.get_normals()
+
+		if self._sig > 0.:
+			if self.bi_var == True:
+				# Creates projection of error_normal on the surface (sin can be avoided because of very small angles).
+				tanx = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+				tany = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+
+				normal_errors_z = (1. / (1. + tanx ** 2. + tany ** 2.)) ** 0.5
+				normal_errors_x = tanx * normal_errors_z
+				normal_errors_y = tany * normal_errors_z
+
+			else:
+				th = N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1]))
+				phi = N.random.uniform(low=0., high=2. * N.pi, size=N.shape(ideal_normals[1]))
+				normal_errors_z = N.cos(th)
+				normal_errors_x = N.sin(th) * N.cos(phi)
+				normal_errors_y = N.sin(th) * N.sin(phi)
+
+			normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
+
+			# Determine rotation matrices for each normal:
+			real_normals = rotate_z_to_normal(normal_errors, ideal_normals)
+			real_normals = real_normals / N.sqrt(N.sum(real_normals ** 2, axis=0))
+		else:
+			real_normals = ideal_normals
+		# Call reflective optics with the new set of normals to get reflections affected by
+		# shape error.
+		outg = rays.inherit(selector,
+							vertices=geometry.get_intersection_points_global(),
+							direction=optics.reflections(rays.get_directions(selector), real_normals),
+							energy=rays.get_energy(selector) * (1 - self._abs),
+							parents=selector)
+
+		if outg.has_property('spectra'):
+			outg._spectra *= (1. - self._abs)
+
+		return outg
+
+class IAM(object):
+	def __init__(self, a_r, c=1):
+		self.a_r = a_r
+		self.c = c
+
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions(selector)
+		vertical = N.sum(directions * normals, axis=0) * normals
+		cos_theta_AOI = N.sqrt(N.sum(vertical ** 2, axis=0))
+		return rays.get_energy(selector)*(1.-self._abs)*(1. -N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))
+
+class Reflective_IAM(Reflective, IAM):
 	'''
 	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
-	def __init__(self, absorptivity, a_r):
+	def __init__(self, absorptivity, a_r, c=1):
 		self._abs = absorptivity
 		self.a_r = a_r
+		Reflective.__init__(self, absorptivity)
+		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
+		outg = Reflective(self, geometry, rays, selector)
+		reflected = IAM.__call__(self , geometry, rays, selector)
+		outg.set_energy(reflected)
+		'''if outg.has_property('spectra'):
+			outg._spectra *= dir_ref'''
 
 		return outg
 
-class Reflective_mod_IAM(object):
-	'''
-	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
-	'''
-	def __init__(self, absorptivity, a_r, c):
-		self._abs = absorptivity
-		self.a_r = a_r
-		self.c = c
-	
-	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
-		return outg
-
-
-class Lambertian_IAM(object):
+class Lambertian_IAM(Lambertian, IAM):
 	'''
 	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
 	'''
-	def __init__(self, absorptivity, a_r):
-		self._abs = absorptivity
-		self.a_r = a_r
+	def __init__(self, absorptivity, a_r, c=1):
+		Lambertian.__init__(self, absorptivity)
+		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
+		outg = Lambertian.__call__(self, geometry, rays, selector)
+		reflected = IAM.__call__(self, geometry, rays, selector)
+		outg.set_energy(reflected)
 
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
-
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=directs,
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
+		'''if outg.has_property('spectra'):
 			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
+		'''
 		return outg
 
-class Lambertian_mod_IAM(object):
-	'''
-	Generates a function that performs diffuse reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
-	'''
-	def __init__(self, absorptivity, a_r, c):
-		self._abs = absorptivity
-		self.a_r = a_r
-		self.c = c
-	
+class RealReflective_IAM(RealReflective, IAM):
+	def __init__(self, absorptivity, a_r, sigma, bi_var=False):
+		RealReflective.__init__(self, absorptivity, sigma, bi_var)
+		IAM.__init__(self, a_r)
+
 	def __call__(self, geometry, rays, selector):
-		normals = geometry.get_normals()
-		directions = rays.get_directions(selector)
-		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
-
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
-
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			direction=directs,
-			energy=rays.get_energy(selector)*(1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))),
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r)))
-
+		outg = RealReflective.__call__(self, geometry, rays, selector)
+		reflected = IAM.__call__(self, geometry, rays, selector)
+		outg.set_energy(reflected)
 		return outg
 
 class Lambertian_directional_axisymmetric_piecewise(object):
@@ -430,69 +488,6 @@ class Lambertian_piecewise_Specular_directional_axisymmetric_piecewise(object):
 
 perfect_mirror = Reflective(0)
 
-class RealReflective(object):
-	'''
-	Generates a function that represents the optics of an opaque absorptive surface with specular reflections and realistic surface slope error. The surface slope error is considered equal in both x and y directions. The consequent distribution of standard deviation is described by a radial bivariate normal distribution law.
-
-	Arguments:
-	absorptivity - the amount of energy absorbed before reflection
-	sigma - Standard deviation of the reflected ray in the local x and y directions. 
-	
-	Returns:
-	Reflective - a function with the signature required by surface
-	'''
-	def __init__(self, absorptivity, sigma, bi_var=True):
-		self._abs = absorptivity
-		self._sig = sigma
-		self.bi_var = bi_var
-
-	def __call__(self, geometry, rays, selector):
-		ideal_normals = geometry.get_normals()
-
-		if self._sig > 0.:
-			if self.bi_var == True:
-				# Creates projection of error_normal on the surface (sin can be avoided because of very small angles).
-				tanx = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-				tany = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-
-				normal_errors_z = (1./(1.+tanx**2.+tany**2.))**0.5
-				normal_errors_x = tanx*normal_errors_z
-				normal_errors_y = tany*normal_errors_z
-
-			else:
-				th = N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1]))
-				phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(ideal_normals[1]))
-				normal_errors_z = N.cos(th)
-				normal_errors_x = N.sin(th)*N.cos(phi)
-				normal_errors_y = N.sin(th)*N.sin(phi)
-
-			normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
-
-			# Determine rotation matrices for each normal:
-			rots_norms = rotation_to_z(ideal_normals.T)
-			if rots_norms.ndim==2:
-				rots_norms = [rots_norms]
-
-			# Build the normal_error vectors in the local frame.
-			real_normals = N.zeros(N.shape(ideal_normals))
-			for i in range(N.shape(real_normals)[1]):
-				real_normals[:,i] = N.dot(rots_norms[i], normal_errors[:,i])
-
-			real_normals_unit = real_normals/N.sqrt(N.sum(real_normals**2, axis=0))
-		else:
-			real_normals_unit = ideal_normals
-		# Call reflective optics with the new set of normals to get reflections affected by 
-		# shape error.
-		outg = rays.inherit(selector,
-			vertices = geometry.get_intersection_points_global(),
-			direction = optics.reflections(rays.get_directions(selector), real_normals_unit),
-			energy = rays.get_energy(selector)*(1 - self._abs),
-			parents = selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1.-self._abs)
-
-		return outg
 
 class OneSidedRealReflective(RealReflective):
 	"""
@@ -508,14 +503,14 @@ class OneSidedRealReflective(RealReflective):
 		outg.set_energy(energy) #substitute previous step into ray energy array
 		return outg
 
-class SemiLambertian(object):
+class SemiLambertian(Reflective, Lambertian):
 	"""
-	Represents the optics of an semi-diffuse surface, i.e. one that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
+	Represents the optics of an semi-diffuse surface, i.e. one that absorbs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
 	"""
 	def __init__(self, absorptivity=0., angular_range=N.pi/2.):
-		self._abs = absorptivity
-		self._ar = angular_range
-	
+		Reflective.__init__(self, absorptivity)
+		Lambertian.__init__(self, absorptivity, angular_range)
+
 	def __call__(self, geometry, rays, selector):
 		"""
 		Arguments:
@@ -525,14 +520,18 @@ class SemiLambertian(object):
 			surface)
 		selector - indices into ``rays`` of the hitting rays.
 		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), self._ar)
 		normals = geometry.get_normals()
 
 		in_directs = rays.get_directions()[selector]
 		angs = N.arccos(N.dot(in_directs, -normals)[2])
-		glancing = angs>self._ar
+		glancing = angs>self._ang_range
 
-		directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
+		specular = Reflective.__call__(self, geometry, rays, selector[glancing])
+		diffuse = Lambertian.__call__(self, geometry, rays, selector[~glancing])
+
+		outg = specular + diffuse
+
+		'''directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
 		directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
 	  
 		energies = rays.get_energy(selector)
@@ -546,40 +545,10 @@ class SemiLambertian(object):
 
 		if outg.has_property('spectra'):
 			outg._spectra[~glancing] *= (1.-self._abs)
+		'''
 		return outg
 
-class Lambertian(object):
-	"""
-	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
-	that reflects rays in a random direction (uniform distribution of
-	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
-	"""
-	def __init__(self, absorptivity=0.):
-		self._abs = absorptivity
-	
-	def __call__(self, geometry, rays, selector):
-		"""
-		Arguments:
-		geometry - a GeometryManager which knows about surface normals, hit
-			points etc.
-		rays - the incoming ray bundle (all of it, not just rays hitting this
-			surface)
-		selector - indices into ``rays`` of the hitting rays.
-		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		normals = geometry.get_normals()
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
 
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy(selector)*(1. - self._abs),
-			direction=directs, 
-			parents=selector)
-
-		if outg.has_property('spectra'):
-			outg._spectra *= (1.-self._abs)
-
-		return outg
 
 class LambertianSpecular(object):
 	"""
@@ -767,7 +736,8 @@ class Refractive(object):
 								The ray-bundles declared need to have a starting refractive index associated to the rays.
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
-		self._materials = (material_1, material_2)
+		materials = [material_1, material_2]
+		self._materials = materials
 		self._single_ray = single_ray
 		self._sigma = sigma
 
@@ -879,27 +849,71 @@ class Refractive(object):
 		# get ray data:
 		directions, wavelengths, m1, energy = self._get_ray_data(rays, selector)
 		reflected_rays, refracted_rays = self._make_refraction_bundle(geometry, normals, inters, rays, directions, wavelengths, m1, energy, selector)
-		return reflected_rays + refracted_rays
+		if reflected_rays is None:
+			outg = refracted_rays
+		elif refracted_rays is None:
+			outg = reflected_rays
+		else:
+			outg = reflected_rays + refracted_rays
+		return outg
+
 
 class Absorbant(object):
 
-	def __init__(self, scaling=1.):
-		# if we scale teh raytrace geometry to avoid floating point errors on intersections, wre have to modify attenuations
+	def __init__(self, attenuation_coefficients=None, scaling=1.):
+		'''
+		:param scaling: is to handle scaled simulations. It needs to be used if we have very small systems and floating point precision can become annoying. If we pre-calculate a changed attenuation coefficient then no need to use the scaling.
+		:param attenuation_coefficient: is for imposed values instead of using the complex part of the refractive index of the materials. It is simpler to implement and avoids needing to declare wavelengths in the ray bundles if we do not care..
+		'''
+		# if we scale the raytrace geometry to avoid floating point errors on intersections, we have to modify attenuations
 		self._scaling = scaling
+		self.a_c = attenuation_coefficients
+		if self.a_c is not None:
+			self.a_c = N.array(attenuation_coefficients)
 
 	def attenuate(self, previous_bundle, new_bundle):
 		prev_inters = previous_bundle.get_vertices(new_bundle.get_parents())
 		inters = new_bundle.get_vertices()
-		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))*self._scaling
-		energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
+		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
+		if self._scaling != 1.:
+			path_lengths *= self._scaling
+		if self.a_c is None:
+			energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
+		else:
+			if len(self.a_c)>1:
+				which = N.array(previous_bundle.get_ref_index(new_bundle.get_parents())==self._ref_idxs[1], dtype=int)
+				a_c = self.a_c[which]
+			else:
+				a_c = self.a_c
+			energy = new_bundle.get_energy()*N.exp(-a_c*path_lengths)
 		new_bundle.set_energy(energy)
+
+class LambertianAbsorbant(Lambertian, Absorbant):
+	'''
+	Optics of an opaque surface at the boundary of an absorbing volume.
+	'''
+	def __init__(self, absorptivity=0., attenuation_coefficient=0., ang_range=N.pi/2., scaling=1.):
+		self._absorptivity=absorptivity
+		Lambertian.__init__(self, absorptivity=1., ang_range=ang_range) # this makes differentiating between attenuationa nd absorption easier.
+		Absorbant.__init__(self, attenuation_coefficient, scaling)
+
+	def __call__(self, geometry, rays, selector):
+		outg = Lambertian.__call__(self, geometry, rays, selector)
+		self.attenuate(rays, outg)
+		incident_ener = outg.get_energy()
+		self.attenuations = incident_ener - rays.get_energy()
+		outg.set_energy(incident_ener*(1.-self._absorptivity))
+		return outg
+
+	def get_attenuations(self):
+		return self.attenuations
 
 class RefractiveAbsorbant(Refractive, Absorbant):
 	'''
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	'''
 
-	def __init__(self, material_1, material_2, single_ray=True, sigma=None, scaling=1.):
+	def __init__(self, material_1, material_2, single_ray=True, sigma=None, attenuation_coefficient_1=None, attenuation_coefficient_2=None, scaling=1.):
 		"""
 		Arguments:
 		material_1, material_2 - Material classes from the optical_constants module.
@@ -907,7 +921,11 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 		single_ray - if True, only simulate a reflected or a refracted ray.
 		"""
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
-		Absorbant.__init__(self, scaling)
+		if (attenuation_coefficient_1 is None) and (attenuation_coefficient_2 is None):
+			attenuation_coefficients = [attenuation_coefficient_1, attenuation_coefficient_2]
+		else:
+			attenuation_coefficients = None
+		Absorbant.__init__(self, attenuation_coefficients, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -923,21 +941,21 @@ class RefractiveAbsorbant(Refractive, Absorbant):
 			outg = reflected_rays
 		else:
 			outg = reflected_rays + refracted_rays
-		'''# Compute attenuation in current medium:
-		prev_inters = rays.get_vertices(outg.get_parents())
-		inters = outg.get_vertices()
-		path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
-		energy = optics.attenuations(path_lengths=path_lengths, k=m1.imag, lambda_0=wavelengths, energy=energy)
-		outg.set_energy(energy)'''
+		# Compute attenuation in current medium:
 		self.attenuate(rays, outg)
 		return outg
 
 
 class Scattering(object):
 
-	def __init__(self, s_c1, s_c2, g_HG_1, g_HG_2):
+	def __init__(self, s_c1, s_c2, g_HG_1, g_HG_2, scaling=1.):
+		'''
+		Scaling should be used if we simulate very small systems as floating point precision can start to be annoying.
+		It should only be changed it the real value sof scattering coefficients are used and not scaled themselves.
+		'''
 		self._s_cs = [s_c1, s_c2]  # Important: in this implementation, the scattering coefficient dictates alone which media is used. This means that sc_1 and sc_2 cannot be equal with different phase functions.
 		self.phase_functions = [Henyey_Greenstein(g_HG_1), Henyey_Greenstein(g_HG_2)]
+		self._scaling = scaling
 
 	def get_media(self, current_s_c):
 		"""
@@ -960,14 +978,22 @@ class Scattering(object):
 		prev_inters = rays.get_vertices(selector)
 		intersection_path_lengths = N.sqrt(N.sum((inters - prev_inters) ** 2, axis=0))
 		s_cs = rays.get_scat_coeff(selector)
+		scaled = self.scaling != 1.
 		# Determine which ray gets scattered:
-		scat_output = optics.scattering(s_cs, intersection_path_lengths, keep_path_lengths)
+		if scaled:
+			scat_output = optics.scattering(s_cs, intersection_path_lengths*scaling, keep_path_lengths)
+		else:
+			scat_output = optics.scattering(s_cs, intersection_path_lengths, keep_path_lengths)
 		if not keep_path_lengths:
 			scat, scattered_path_lengths = scat_output
 		else:
-			scat, scattered_path_lengths, self.to_scatter = scat_output
+			scat, scattered_path_lengths, self.to_scatter = scat_output # self.to_scatter is used to keep track of path length already used for the estimation of teh next scattering event, when periodic boundary conditions are used.
 
-		return scat, scattered_path_lengths, prev_inters
+		if scaled:
+			self.to_scatter /= self._scaling
+			return scat, scattered_path_lengths/self._scaling, prev_inters
+		else:
+			return scat, scattered_path_lengths, prev_inters
 
 
 	def _get_scattering_directions(self, scat, media):
@@ -1017,7 +1043,7 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.
 	'''
 
-	def __init__(self, period, sc, g_HG):
+	def __init__(self, period, sc, g_HG, scaling=1.):
 		'''
 		Argument:
 		period: distance of periodic repetition. The ray positions are translated of period*normal vector for the next bundle, with same direction and energy.
@@ -1025,7 +1051,7 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 		g_HG: phase function parameter of the medium
 		'''
 		self.period = period
-		Scattering.__init__(self, sc, None, g_HG, None)
+		Scattering.__init__(self, sc, None, g_HG, None, scaling=scaling)
 
 	def __call__(self, geometry, rays, selector):
 
@@ -1063,17 +1089,20 @@ class ScatteringPeriodicBoundary(PeriodicBoundary, Scattering):
 		else:
 			return scattered_rays+outg
 
+class AbsorbantPeriodicBoundary(PeriodicBoundary, Absorbant):
+	def __init__(self, period, attenuation_coefficient=None, scaling=1.):
+		PeriodicBoundary.__init__(self, period, scaling)
+		Absorbant.__init__(self, attenuation_coefficient, scaling)
+
 class ScatteringAbsorbantPeriodicBoundary(ScatteringPeriodicBoundary, Absorbant):
-	def __init__(self, period, sc, g_HG, material, scaling=1.):
-		self.material = material
-		ScatteringPeriodicBoundary.__init__(self, period, sc, g_HG)
-		Absorbant.__init__(self, scaling)
+	def __init__(self, period, sc, g_HG, attenuation_coefficient=None, scaling=1.):
+		ScatteringPeriodicBoundary.__init__(self, period, sc, g_HG, scaling)
+		Absorbant.__init__(self, attenuation_coefficient, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		# This is done this way so that the rendering knows that there is no ray between the hit on the first BC and the new ray starting form the second. With this implementation, the outg rays are cancelled because their energy is 0 and only the outg2 are going forward.
 		# set original outgoing energy to 0
 		outg = ScatteringPeriodicBoundary.__call__(self, geometry, rays, selector)
-
 		# Attenuate ray energy:
 		self.attenuate(rays, outg)
 		return outg
@@ -1102,11 +1131,11 @@ class RefractiveScattering(Refractive, Scattering):
 	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
 	'''
 
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray=True, sigma=None):
 		Refractive.__init__(self, material_1, material_2, single_ray, sigma)
 		self._s_cs = [s_c1, s_c2]  #
 		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
-		Scattering.__init__(self, s_c1, s_c2, 0., g_HG)
+		Scattering.__init__(self, s_c1, s_c2, g_HG_1, g_HG_2)
 
 	def __call__(self, geometry, rays, selector):
 		if len(selector) == 0:
@@ -1144,10 +1173,13 @@ class RefractiveScattering(Refractive, Scattering):
 		return output_bundle
 
 class RefractiveScatteringAbsorbant(RefractiveScattering, Absorbant):
-	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray=True, sigma=None, scaling=1.):
-		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG, single_ray, sigma)
-		Absorbant.__init__(self, scaling)
-
+	def __init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, attenuation_coefficient_1=None, attenuation_coefficient_2=None, single_ray=True, sigma=None, scaling=1.):
+		RefractiveScattering.__init__(self, material_1, material_2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray, sigma)
+		if (attenuation_coefficient_1 is None) and (attenuation_coefficient_2 is None):
+			attenuation_coefficients = [attenuation_coefficient_1, attenuation_coefficient_2]
+		else:
+			attenuation_coefficients = None
+		Absorbant.__init__(self, attenuation_coefficients, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		out_rays = super().__call__(geometry, rays, selector)
@@ -1187,14 +1219,92 @@ class RefractiveHomogenous(Refractive):
 		"""
 		return N.where(current == self._ref_idxs[0],
 					   self._ref_idxs[1], self._ref_idxs[0])
+					   
+	def _get_ray_data(self, rays, selector):
+		return rays.get_directions(selector), N.ones(len(selector)), rays.get_ref_index(selector), rays.get_energy(selector)
 
-class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
+	def _get_geom_data(self, geometry):
+		return geometry.get_normals(), geometry.get_intersection_points_global()
+
+	def _refract_dirs(self, normals, n1, wavelengths, directions):
+		if self._sigma is not None:
+			th = N.random.normal(scale=self._sigma, size=N.shape(normals[1]))
+			phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(normals[1]))
+			normal_errors = N.vstack((N.sin(th) * N.cos(phi), N.sin(th) * N.sin(phi), N.cos(th)))
+
+			# Determine rotation matrices for each normal:
+			rots_norms = rotation_to_z(normals.T)
+			if rots_norms.ndim == 2:
+				rots_norms = [rots_norms]
+
+			# Build the normal_error vectors in the local frame.
+			for i in range(N.shape(normals)[1]):
+				normals[:, i] = N.dot(rots_norms[i], normal_errors[:, i])
+
+		# Check for refractions:
+		# determine indices of refraction on both sides of the intersections
+		n2 = self.toggle_ref_idx(n1, wavelengths)
+
+		# otherwise
+		refr, out_dirs = optics.refractions(n1, n2, \
+											directions, normals)
+
+		return refr, out_dirs, n2
+
+	def _make_output_refraction_bundles(self, inters, directions, normals, energy, rays, selector, refr, out_dirs, R, n2):
+		# The output bundle is generated by stacking together the reflected and
+		# refracted rays in that order.
+		if self._single_ray:
+			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
+			refl = N.random.uniform(size=R.shape) <= R
+			# reflected rays are TIR OR rays selected to go to reflection
+			sel_refl = N.argwhere(refl).flatten()#selector[refl]
+			sel_refr = N.argwhere(~refl).flatten()#selector[~refl]
+			dirs_refr = N.zeros((3, len(selector)))
+			dirs_refr[:, refr] = out_dirs
+			dirs_refr = dirs_refr[:, ~refl]
+
+			if len(sel_refl)>0:
+				reflected_rays = rays.inherit(sel_refl, vertices=inters[:, refl],
+										  direction=optics.reflections(
+											  directions[:, refl],
+											  normals[:, refl]),
+										  energy=energy[refl],
+										  parents=selector[refl])
+			else:
+				reflected_rays = None
+
+			if len(sel_refr)>0:
+				refracted_rays = rays.inherit(sel_refr, vertices=inters[:, ~refl],
+										  direction=dirs_refr, parents=selector[~refl],
+										  energy=energy[~refl],
+										  ref_index=n2[~refl])
+			else:
+				refracted_rays = None
+
+
+		else:
+			reflected_rays = rays.inherit(selector, vertices=inters,
+										  direction=optics.reflections(
+											  directions,
+											  normals),
+										  energy=energy * R,
+										  parents=selector)
+
+			refracted_rays = rays.inherit(selector[refr], vertices=inters[:, refr],
+										  direction=out_dirs, parents=selector[refr],
+										  energy=energy[refr] * (1. - R[refr]),
+										  ref_index=n2[refr])
+
+		return reflected_rays,  refracted_rays
+
+class RefractiveAbsorbantHomogenous(RefractiveHomogenous, Absorbant):
 	'''
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation
 	where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
 	There is WIP to add this small efect in the optics module.
 	'''
-	def __init__(self, m1, m2, single_ray=True, sigma=None, scaling=1.):
+	def __init__(self, m1, m2, single_ray=True, sigma=None, attenuation_coefficient_1=None, attenuation_coefficient_2=None, scaling=1.):
 		"""
 		Arguments:
 		m1, m2 - scalars representing the homogenous complex refractive index on each
@@ -1205,11 +1315,42 @@ class RefractiveAbsorbantHomogenous(RefractiveHomogenous):
 			    two in the next bundle.
 		"""
 		RefractiveHomogenous.__init__(self, m1, m2, single_ray, sigma)
+		if (attenuation_coefficient_1 is None) and (attenuation_coefficient_2 is None):
+			attenuation_coefficients = [attenuation_coefficient_1, attenuation_coefficient_2]
+		else:
+			attenuation_coefficients = None
+		Absorbant.__init__(self, attenuation_coefficients, scaling)
 
 	def __call__(self, geometry, rays, selector):
-		return RefractiveAbsorbant.__call__(self, geometry, rays, selector, scaling=scaling)
+		out_rays = RefractiveHomogenous.__call__(self, geometry, rays, selector)
+		self.attenuate(rays, out_rays)
+		return out_rays
 
-class RefractiveScatteringHomogenous(RefractiveHomogenous):
+class RefractiveTransmissiveHomogenous(RefractiveHomogenous, Absorbant):
+	'''
+	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation
+	where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
+	There is WIP to add this small efect in the optics module.
+	'''
+	def __init__(self, n1, n2, attenuation_coefficients, single_ray=True, sigma=None, scaling=1.):
+		"""
+		Arguments:
+		m1, m2 - scalars representing the homogenous complex refractive index on each
+			side of the surface (order doesn't matter).
+		single_ray - if True, refraction or reflection is decided for each ray
+			    based on the amount of reflection coefficient and only a single
+			    ray is launched in the next bundle. Otherwise, the ray is split into
+			    two in the next bundle.
+		"""
+		RefractiveHomogenous.__init__(self, n1, n2, single_ray, sigma)
+		Absorbant.__init__(self, scaling=scaling, attenuation_coefficients=attenuation_coefficients)
+
+	def __call__(self, geometry, rays, selector):
+		out_rays = RefractiveHomogenous.__call__(self, geometry, rays, selector)
+		self.attenuate(rays, out_rays)
+		return out_rays
+
+class RefractiveScatteringHomogenous(RefractiveHomogenous, Scattering):
 	'''
 	Same as RefractiveHomogenous but with sacttering in the medium.
 
@@ -1229,17 +1370,16 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 	n1, n2 - scalars representing the homogenous refractive index on each
 			side of the surface (order doesn't matter).
 	s_c1, s_c2 - Scattering coefficients of medium 1 and medium 2 in m-1
-	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scattering.
+	g_HG - asymmetry factor for the Henyey-Greenstein phase function, from -1 to 1. 0 is anisotropic scatter ing.
 	'''
 
-	def __init__(self, n1, n2, s_c1, s_c2, g_HG, single_ray=True, sigma=None):
+	def __init__(self, n1, n2, s_c1, s_c2, g_HG_1, g_HG_2, single_ray=True, sigma=None):
 		RefractiveHomogenous.__init__(self, n1, n2, single_ray, sigma)
-
-		self._s_cs = [s_c1, s_c2]  #
-		self.phase_function = Henyey_Greenstein(g_HG)  # Henyey-Greenstein phase function parameter
+		Scattering.__init__(self, s_c1, s_c2, g_HG_1, g_HG_2)
 
 	def __call__(self, geometry, rays, selector):
 		return RefractiveScattering.__call__(self, geometry, rays, selector)
+
 	'''
 	def` toggle_media(self, current_ref_idx, current_s_c):
 		"""
@@ -1381,6 +1521,8 @@ class RefractiveScatteringHomogenous(RefractiveHomogenous):
 				ret_bundle = reflected_rays + refracted_rays
 		return ret_bundle
 		'''
+
+
 class FresnelConductorHomogenous(object):
 	'''
 	Fresnel equation with a conductive medium instersected. The attenuation is total in a very short range in the intersected metal and refraction is not modelled. Only strictly valid for k2 >> 1 and in situations where the refracted ray is not interacting with the scene again (eg. not traversing thin metal volumes).
@@ -1447,7 +1589,7 @@ class Accountant(ABC):
 
 	@abstractmethod
 	def count(self, geometry, rays, selector, new_bundle):
-		# Accumulate data, done withing OpticsCallable __call__ method
+		# Accumulate data, done within OpticsCallable __call__ method
 		pass
 
 	@abstractmethod
@@ -1456,6 +1598,10 @@ class Accountant(ABC):
 		return
 
 class LocationAccountant(Accountant):
+	"""
+	This optics manager remembers all of the locations where rays hit it
+	in all iterations.
+	"""
 	def __init__(self):
 		super().__init__()
 		self.shorthand = 'Location'
@@ -1481,8 +1627,8 @@ class LocationAccountant(Accountant):
 
 class AbsorptionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the absorbed energies
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1495,6 +1641,8 @@ class AbsorptionAccountant(Accountant):
 	def count(self, geometry, rays, selector, new_bundle):
 		ein = rays.get_energy(selector)
 		eout = new_bundle.get_energy()
+		if hasattr(self, 'get_attenuations'):
+			ein -= self.get_attenuations()
 		self._absorbed.append(ein - eout)
 
 	def get_data(self):
@@ -1502,18 +1650,46 @@ class AbsorptionAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
+		the energy absorbed by each hit-point
+
 		"""
 		if not len(self._absorbed):
 			return N.array([])
 
 		return N.hstack([a for a in self._absorbed if len(a)])
 
+class AttenuationAccountant(Accountant):
+	'''
+	This optics manager remembers all of the energy attenuated ray by ray.
+	'''
+	def __init__(self):
+		super().__init__()
+		self.shorthand = 'Attenuator'
+
+	def reset(self):
+		"""Clear the memory of hits (best done before a new trace)."""
+		self._attenuated = []
+
+	def count(self, geometry, rays, selector, new_bundle):
+		self._attenuated.append(self.get_attenuations())
+
+	def get_data(self):
+		"""
+		Aggregate all hits from all stages of tracing into joined arrays.
+
+		Returns:
+		the energy incident at each hit-point
+		"""
+		if not len(self._received):
+			return N.array([])
+
+		return N.hstack([a for a in self._attenuated if len(a)])
+
+
 class ReceptionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the incident energies if ray hits in
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1532,8 +1708,7 @@ class ReceptionAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 
 		Returns:
-		absorbed - the energy absorbed by each hit-point
-		hits - the corresponding global coordinates for each hit-point.
+		the energy incident at each hit-point
 		"""
 		if not len(self._received):
 			return N.array([])
@@ -1542,7 +1717,7 @@ class ReceptionAccountant(Accountant):
 
 class ScatteringAccountant(Accountant):
 	'''
-	in all iterations, and the energy that was scattered (here understood as not absorbed) for each ray.
+	In all iterations, stores the energy that was scattered (here understood as not absorbed) for each ray.
 	'''
 	def __init__(self):
 		super().__init__()
@@ -1561,7 +1736,7 @@ class ScatteringAccountant(Accountant):
 		Aggregate all hits from all stages of tracing into joined arrays.
 		
 		Returns:
-		_transmitted - the energy not absorbed by each hit-point
+		The energy scattered at each hit-point
 		"""
 		if not len(self._scattered):
 			return N.array([])
@@ -1570,8 +1745,8 @@ class ScatteringAccountant(Accountant):
 
 class DirectionAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the incident directions where rays hit
+	in all iterations.
 	"""
 	def __init__(self):
 		super().__init__()
@@ -1598,11 +1773,10 @@ class DirectionAccountant(Accountant):
 		
 		return N.hstack([d for d in self._directions if d.shape[1]])
 
-
 class NormalAccountant(Accountant):
 	"""
-	This optics manager remembers all of the locations where rays hit it
-	in all iterations, and the energy absorbed from each ray.
+	This optics manager remembers all of the local normals at rays hits
+	in all iterations.
 	"""
 
 	def __init__(self):
@@ -1752,9 +1926,6 @@ class BiFacial(object):
 		except:
 			pass
 
-
-
-
 # This stuff automatically generates the classes from optical callables using the relevant Accountants.
 '''
 def subclass_from_name(name, parent, optics_class):
@@ -1881,10 +2052,10 @@ def make_accountant_classes(optical_class):
 # opposite order of the output because it reads better when declaring
 accountants_raw = Accountant.__subclasses__()
 accountants = []
-# TODO: decide this, split spectral and polychromatic, associate polychrimatic with energy processing and change order decided so far.
+# TODO: decide this, split spectral and polychromatic, associate polychromatic with energy processing and change order decided so far.
 # Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
 # Within each category, do alphabetical
-accountant_types = ['Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
+accountant_types = ['Absorption', 'Attenuation', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
 for at in accountant_types:
 	accountants.extend([a for a in accountants_raw if at in a.__name__])
 # Aliases to make declaration easier for common accountants and ensure backward compatibility

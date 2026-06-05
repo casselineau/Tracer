@@ -48,7 +48,7 @@ class optical_material(object):
 				l_low = (lambdas<self.l_min)
 				l_high = (lambdas>self.l_max)
 			if l_low or l_high:
-				print ("Wavelength outside of data or model range of validity")
+				print ("Wavelength for %s outside of data or model range of validity"%(super()))
 				print (self.l_min, self.l_max)
 				print (l_low, l_high)
 				valid = N.logical_and(lambdas>=self.l_min, lambdas<=self.l_max)
@@ -140,18 +140,19 @@ class OpticalMaterialFromFile(optical_material):
 		return self.m_func(lambdas)
 
 
-class Air(optical_material):
+class Air(object):
 
-	def __init__(self):
+	'''def __init__(self):
 		# simplified air/vaccum placeholder returning 1.
-		optical_material.__init__(self, 200e-9, 10e-6)
+		optical_material.__init__(self, 200e-9, 300e-6)
+	'''
 
-	@optical_material.check_valid
+	#@optical_material.check_valid
 	def m(self, lambdas):
 		'''
 		Optical constants used by the optical manager in tracer
 		'''
-		return 1.
+		return N.ones(len(lambdas))
 		
 class SiO2(optical_material):
 

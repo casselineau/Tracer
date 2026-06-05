@@ -161,46 +161,47 @@ class Assembly(HasFrame):
 		boundaries = []
 		for obj in self._objects:
 			n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
-			boundaries += obj.get_boundaries()
+			boundaries += [obj.get_boundaries()]
+		n0.addChild(n)
 
 		if bounding_boxes:
-			for b in boundaries:
+			for i, bs in enumerate(boundaries):
 				coords = []
 				nedges = []
-				if b:
-					minp, maxp = b._AABB
+				for b in bs:
+					minp, maxp = b._AABB - b._temp_frame[:3,3]
 					# base
-					coords.extend([(minp[0], minp[1], minp[2]),\
-								  (maxp[0], minp[1], minp[2]),\
-								  (maxp[0], maxp[1], minp[2]),\
-								  (minp[0], maxp[1], minp[2]),\
-								  (minp[0], minp[1], minp[2])])
+					coords.extend([(minp[0], minp[1], minp[2]), \
+								   (maxp[0], minp[1], minp[2]), \
+								   (maxp[0], maxp[1], minp[2]), \
+								   (minp[0], maxp[1], minp[2]), \
+								   (minp[0], minp[1], minp[2])])
 					nedges.append(5)
 					# columns
-					coords.extend([(minp[0], minp[1], minp[2]),\
-								  (minp[0], minp[1], maxp[2]),\
-								  (maxp[0], minp[1], minp[2]),\
-								  (maxp[0], minp[1], maxp[2]),\
-								  (maxp[0], maxp[1], minp[2]),\
-								  (maxp[0], maxp[1], maxp[2]),\
-								  (minp[0], maxp[1], minp[2]),\
-								  (minp[0], maxp[1], maxp[2])])
-					nedges.extend((2,2,2,2))
+					coords.extend([(minp[0], minp[1], minp[2]), \
+								   (minp[0], minp[1], maxp[2]), \
+								   (maxp[0], minp[1], minp[2]), \
+								   (maxp[0], minp[1], maxp[2]), \
+								   (maxp[0], maxp[1], minp[2]), \
+								   (maxp[0], maxp[1], maxp[2]), \
+								   (minp[0], maxp[1], minp[2]), \
+								   (minp[0], maxp[1], maxp[2])])
+					nedges.extend((2, 2, 2, 2))
 					# roof
-					coords.extend([(minp[0], minp[1], maxp[2]),\
-								  (maxp[0], minp[1], maxp[2]),\
-								  (maxp[0], maxp[1], maxp[2]),\
-								  (minp[0], maxp[1], maxp[2]),\
-								  (minp[0], minp[1], maxp[2])])
+					coords.extend([(minp[0], minp[1], maxp[2]), \
+								   (maxp[0], minp[1], maxp[2]), \
+								   (maxp[0], maxp[1], maxp[2]), \
+								   (minp[0], maxp[1], maxp[2]), \
+								   (minp[0], minp[1], maxp[2])])
 					nedges.append(5)
 
-					coords = N.reshape(N.ravel(coords), (-1,3))
+					coords = N.reshape(N.ravel(coords), (-1, 3))
 					nedges = N.ravel(nedges)
 
 					bb = coin.SoSeparator()
 
 					ma1 = coin.SoMaterial()
-					ma1.diffuseColor = (0.,0.,0.)
+					ma1.diffuseColor = (0., 0., 0.)
 					bb.addChild(ma1)
 
 					ds = coin.SoDrawStyle()
@@ -217,7 +218,6 @@ class Assembly(HasFrame):
 					bb.addChild(ls)
 
 					n0.addChild(bb)
-		n0.addChild(n)
 		return n0
 		
 # vim: ts=4

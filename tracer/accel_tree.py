@@ -216,7 +216,7 @@ class KdTree(object):
 	def traversal(self, bundle, lightweight=False):
 		'''
 		Close to pure PBRT but the ray bundles have to test all potential surfaces in the relevant trea leaves simulatneously (ie. it is not checking the closest box first. this is due to the Tracer way of doing ray-tracing and is not modified yet.
-		'Lighweight; is an attemps to replace the binary stack that determines the intersection-tested surfaces with a data structure based on lists of integers that indicate for each surface which bunch of rays to test first and see if any intersection is obteined before scheduling the next bundle. It does not seem to provide much benefits so far...
+		'Lighweight; is an attempt to replace the binary stack that determines the intersection-tested surfaces with a data structure based on lists of integers that indicate for each surface which bunch of rays to test first and see if any intersection is obtained before scheduling the next bundle. It does not seem to provide much benefits so far...
 		'''
 		t0 = time.time()
 
@@ -284,7 +284,7 @@ class KdTree(object):
 							for s in node.surfaces_idxs.tolist():
 								while len(surfaces_relevancy[s])<=ray_orders[r]:
 									surfaces_relevancy[s].append([])
-								if r not in surfaces_relevancy[s][ray_orders[r]]: # here we remove double accounting that can be caused by the inclusoin of both the minimum and maximum of the boundaries for safety.
+								if r not in surfaces_relevancy[s][ray_orders[r]]: # here we remove double accounting that can be caused by the inclusion of both the minimum and maximum of the boundaries for safety.
 									surfaces_relevancy[s][ray_orders[r]] += [r]
 							ray_orders[r] += 1
 						else:

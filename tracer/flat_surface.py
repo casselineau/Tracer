@@ -204,7 +204,7 @@ class RectPlateGM(FiniteFlatGM):
 		self._half_dims = N.c_[[width, height]]/2.
 
 		FiniteFlatGM.__init__(self)
-		
+
 	def find_intersections(self, frame, ray_bundle):
 		"""
 		Extends the parent flat geometry manager by discarding in advance
@@ -395,7 +395,7 @@ class PerforatedRectPlateGM(RectPlateGM):
 		As the surface is picewise defined, the mesh returns a series of arrays.
 		"""
 		if resolution == None:
-			resolution = 100
+			resolution = 16*4+1
 
 		xs, ys = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], resolution+1), N.linspace(-self._half_dims[1,0], self._half_dims[1,0], resolution+1)
 		X, Y = N.broadcast_arrays(xs[:, None], ys)
@@ -483,7 +483,7 @@ class RoundPlateGM(FiniteFlatGM):
 		self._Ri = Ri	   
 		self._Re = Re
 		FiniteFlatGM.__init__(self)
-	
+
 	def find_intersections(self, frame, ray_bundle):
 		"""
 		Extends the parent flat geometry manager by discarding in advance

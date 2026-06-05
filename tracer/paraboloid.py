@@ -325,4 +325,144 @@ class RectangularParabolicDishGM(Paraboloid):
 		
 		return x, y, z
 	
+class ParabolicCylinder(QuadricGM):
+	"""Implements the geometry of a circular paraboloid surface"""
+	def __init__(self, a=1.):
+		"""			   
+		Arguments: 
+		a - describe the paraboloid as z = (x/a)**2
+			(sorry, legacy)
+		
+		Private attributes:																  
+		a - describe the paraboloid as z = a*x**2 
+		""" 
+
+		QuadricGM.__init__(self)
+		self.a = 1./(a**2)
+
+		
+	def get_ABC(self, ray_bundle):
+		"""
+		Determines the variables forming the relevant quadric equation, [1]
+		"""
+		# Transform the the direction and position of the rays temporarily into the
+		# frame of the paraboloid for calculations
+		d = N.dot(self._working_frame[:3,:3].T, ray_bundle.get_directions())
+		v = N.dot(N.linalg.inv(self._working_frame), 
+			N.vstack((ray_bundle.get_vertices(), N.ones(d.shape[1]))))[:3]
+		
+		A = self.a*d[0]**2
+		B = 2*self.a*d[0]*v[0] - d[2] 
+		C = self.a*v[0]**2 - v[2]
+		
+		return A, B, C
+		
+	def _normals(self, hits, directs):
+		"""
+		Finds the normal to the parabola in a bunch of intersection points, by
+		taking the derivative and rotating it. Used internally by quadric.
+		
+		Arguments:
+		hits - the coordinates of intersections, as an n by 3 array.
+		directs - directions of the corresponding rays, n by 3 array.
+		"""
+		hit = N.dot(N.linalg.inv(self._working_frame), N.vstack((hits.T, N.ones(hits.shape[0]))))
+		dir_loc = N.dot(self._working_frame[:3,:3].T, directs.T)
+
+		partial_x = 2*hit[0]*self.a
+		partial_y = N.zeros(N.shape(hits)[0])
+		partial_z = -1*N.ones(N.shape(hits)[0])
+		
+		local_normal = N.vstack((partial_x, partial_y, partial_z))
+		local_unit = local_normal/N.sqrt(N.sum(local_normal**2, axis=0))
+
+		down = N.sum(dir_loc * local_unit, axis=0) > 0.
+		local_unit[:,down] *= -1
+
+		normals = N.dot(self._working_frame[:3,:3], local_unit)
+
+		return normals
+
+class ParabolicTroughGM(ParabolicCylinder):
+	"""
+	A paraboloid that marks rays outside its diameter as missing. The
+	parameters for the paraboloid's equation are determined from the focal
+	length.
+	"""
+	def __init__(self, aperture, focal_length, length):
+		"""
+		Arguments:
+		diameter - of the circular aperture created by cutting the paraboloid
+			with a plane parallel to the xy plane.
+		focal_length - distance of the focal point from the origin.
+		"""
+		par_param = 2.*N.sqrt(focal_length) # [2]
+		ParabolicCylinder.__init__(self, par_param)
+		self._l = length
+		self._w = float(aperture) # For the mesh
+		self._h = float((aperture/2./par_param)**2)
+	
+	def _select_coords(self, coords, prm):
+		"""
+		Choose between two intersection points on a quadric surface.
+		This implementation extends QuadricGM's behaviour by not choosing
+		intersections outside the circular aperture.
+		
+		Arguments:
+		coords - a 2 by 3 by n array whose each column is the global coordinates
+			of one intersection point of a ray with the sphere.
+		prm - the corresponding parametric location on the ray where the
+			intersection occurs.
+
+		Returns:
+		The index of the selected intersection, or None if neither will do.
+		"""
+		select = N.empty(prm.shape[1])
+		select.fill(N.nan)
+
+		positive = prm > 1e-6
+		
+		coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis=1)
+		#local_coords = N.sum(N.linalg.inv(self._working_frame)[None,1:,:,None]*coords, axis=1)
+		local_coords = N.sum(N.linalg.inv(self._working_frame)[None,:3,:,None] * \
+			coords[:,None,:,:], axis=2)
+		
+		local_y = local_coords[:,1]
+		local_z = local_coords[:,2]
+
+		in_length = N.abs(local_y)<= self._l/2.
+
+		under_cut = (local_z <= self._h) & (local_z >= 0.)
+		in_aperture = under_cut & positive
+
+		hitting = in_length & in_aperture
+		select[N.logical_and(*hitting)] = 1
+		one_hitting = N.logical_xor(*hitting)
+		select[one_hitting] = N.nonzero(hitting.T[one_hitting,:])[1]
+
+		return select
+	
+	def mesh(self, resolution=None):
+		"""
+		Represent the surface as a mesh in local coordinates. Uses polar
+		bins, i.e. the points are equally distributed by angle and radius,
+		not by x,y.
+		
+		Arguments:
+		resolution - in points per unit length (so the number of points 
+			returned is O(A*resolution**2) for area A)
+		
+		Returns:
+		x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
+			coordinate (respectively) of point (i,j) in the mesh.
+		"""
+		if resolution is None:
+			#resolution = 2*N.pi*self._R / 40
+			resolution = 40
+		# Generate a cylindrical mesh using cylindrical coordinates ncentered on the focal line
+		ws = N.linspace(-self._w/2., self._w/2., resolution+1)
+		ls = N.linspace(-self._l/2., self._l/2., resolution+1)
+		x, y = N.meshgrid(ws, ls)
+		z = self.a*x**2
+		return x, y, z
 

@@ -12,7 +12,7 @@ class AssembledObject(Assembly):
 	The object also tracks refractive indices as a ray bundle leaves or enters a new
 	material.
 	"""
-	def __init__(self, surfs=None, bounds=None, transform=None):
+	def __init__(self, surfs=None, bounds=None, location=None, rotation=None, transform=None):
 		"""
 		Attributes:
 		surfaces - a list of Surface objects
@@ -42,6 +42,10 @@ class AssembledObject(Assembly):
 
 		if transform is None:
 			transform = N.eye(4)
+			if location is not None:
+				transform[:3, 3] = location
+			if rotation is not None:
+				transform[:3, :3] = rotation
 
 		self.set_transform(transform)
 
