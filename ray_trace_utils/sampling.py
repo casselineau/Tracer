@@ -1,5 +1,6 @@
 import numpy as N
 from scipy.interpolate import RegularGridInterpolator
+from shapely import Polygon, constrained_delaunay_triangles
 
 class PW_linear_distribution(object):
 
@@ -281,16 +282,86 @@ def pw_linear_importance_sampling(dist, ns):
 	weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
 	return x_s, weights
 	
-def disk_sampling(r_ext, ns, normal_up=True):
+def disk_sampling(r_ext, ns, normals=False, normal_up=True):
 	ths = N.random.uniform(size=ns)*2.*N.pi
 	rs = N.sqrt(N.random.uniform(size=ns))*r_ext
 	positions = N.vstack([rs*N.cos(ths), rs*N.sin(ths), N.zeros(ns)])
-	normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
-	if normal_up == False:
-		normals = -normals
-	return positions, normals
-	
-def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
+	if normals:
+		normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
+		if normal_up == False:
+			normals = -normals
+		return positions, normals
+	return positions
+
+def rectangle_sampling(x, y, ns, normals=False, normal_up=True):
+	xs = random.uniform(low=-x/2., high=x/2., size=num_rays)
+	ys = random.uniform(low=-y/2., high=y/2., size=num_rays)
+	positions = N.vstack((ys, xs, N.zeros(ns)))
+	if normals:
+		normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
+		if normal_up == False:
+			normals = -normals
+		return positions, normals
+	return positions
+
+def triangle_sampling(A, B, C, ns, normals=False, normal_up=True):
+	"""
+	Triangular ray-casting surface. A, B and C are 3D coordinates of the vertices. Right hand rule determines the normal vector direction.
+	Arguments:
+	- num_rays: the number of rays
+	- A: The first summit of the triangle and its anchor point.
+	- AB and AC the vertices of the sides of the triangle in its plane of reference.
+	"""
+	# Triangle ray vertices:
+	# Declare random numbers:
+	r1 = N.vstack(N.random.uniform(size=ns))
+	r2 = N.vstack(N.random.uniform(size=ns))
+
+	AB = B - A
+	AC = C - A
+	sqrtr1 = N.sqrt(r1)
+
+	positions = (A + sqrtr1 * (1. - r2) * AB + r2 * sqrtr1 * AC).T  # Triangle point picking
+	if normals:
+		normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
+		if normal_up == False:
+			normals = -normals
+		return positions, normals
+	return positions
+
+def polygon_sampling(profile, ns, normals=False, normal_up=True):
+	'''
+	profile is in 2D in plane
+	'''
+	# find triangles
+	triangles = constrained_delaunay_triangles(Polygon(profile))
+	# get triangles areas
+	areas = []
+	for t in triangles.geoms:
+		areas.append(t.area)
+	cum_areas = N.add.accumulate(areas)/N.sum(areas)
+	# declare random variate
+	triangle_picker = N.random.uniform(size=ns)
+	# Find which triangle
+	verts = []
+	for i, a in enumerate(cum_areas):
+		in_t = triangle_picker < a
+		ns_t = N.sum(in_t)
+		if ns_t > 0:
+			xs, ys = triangles.geoms[i].exterior.xy
+			A, B, C = N.array([xs, ys]).T[:-1]
+			verts.append(triangle_sampling(A, B, C, ns_t))
+			triangle_picker = triangle_picker[~in_t]
+	positions = N.zeros((3,ns))
+	positions[:2] = N.concatenate(verts, axis=1)
+	if normals:
+		normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
+		if normal_up == False:
+			normals = -normals
+		return positions, normals
+	return positions
+
+def cylinder_sampling(r_ext, h, ns, normals=False, normal_in=False, volume=False):
 	'''
 	Uniformly samples a cylinder surface or volume if volume argument is True
 	Surface sampling also returns surface normal vetcors at the sampled points locations.
@@ -299,16 +370,60 @@ def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
 	if volume == False:
 		ths = N.random.uniform(size=ns)*2.*N.pi
 		positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
-		normals = N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
-		if normal_in == True:
-			normals = -normals
-		return positions, normals
+		if normals:
+			normals = N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
+			if normal_in == False:
+				normals = -normals
+			return positions, normals
 	else:
-		positions, normdisk = disk_sampling(r_ext, ns)
+		positions = disk_sampling(r_ext, ns, normals=False)
 		positions[2] = zs
-		return positions
+	return positions
+
+def frustum_sampling(r0, r1, z0, z1, ns, normals=False, normal_in=False, volume=False, angular_span=[0., 2.*N.pi]):
+
+	c = (r1-r0)/(z1-z0)
+	R = N.random.uniform(size=ns)
+	phi = N.random.uniform(low=angular_span[0], high=angular_span[1], size=ns)
+
+	if volume == False:
+		rs = N.sqrt((r1 ** 2. - r0 ** 2.) * R + r0 ** 2.)
+		zs = (rs - r0) / c
+		positions = N.array([rs*N.cos(phi), rs*N.sin(phi), zs])
+		if normals:
+			theta_s = N.arctan(c) - N.pi / 2.
+			sinths = N.sin(theta_s)
+			normals = N.array([N.cos(phi)*sinths, N.sin(phi)*sinths, N.ones(ns)*N.cos(theta_s)])
+			if normal_in == False:
+				normals = -normals
+			return positions, normals
+	else:
+		Z = N.random.uniform(size=ns)
+		V = N.pi * h / 3 * (r1 ** 2 + r2 ** 2 + r1 * r2)
+
+		# Monic cubic in z:  z^3 + b2*z^2 + b1*z + b0 = 0
+		b2 = 3 * r1 / c
+		b1 = 3 * (r1 / c) ** 2
+		b0 = -3 * Z * V / (N.pi * c ** 2)
+
+		# Depress via z = t - b2/3  =>  t^3 + p*t + q = 0
+		shift = b2 / 3  # = r1/c
+		#p = b1 - b2 ** 2 / 3  # = 0 exactly (verifiable analytically)
+		q = b0 - b1 * b2 / 3 + 2 * (b2 ** 3) / 27
+
+		# Note: p = 3*(r1/beta)^2 - (3*r1/beta)^2/3 = 0
+		# The depressed cubic is simply:  t^3 + q = 0  =>  t = cbrt(-q)
+		# This is the simplest Cardano case — no discriminant needed.
+		t = N.sign(-q) * N.abs(-q) ** (1 / 3)
+		zs = N.clip(t - shift, 0, h)
+
+		rzs = r0 + c * z
+		rs  = rzs * N.sqrt(R)
+		positions = N.array([rs*N.cos(phi), rs*N.sin(phi), zs])
+
+	return positions
 	
-def sphere_sampling(r_ext, ns, normal_in=False, volume=False):
+def sphere_sampling(r_ext, ns, normals=False, normal_in=False, volume=False):
 	'''
 	Uniformly samples a sphere surface or volume if volume argument is True
 	Surface sampling also returns surface normal vectors at the sampled points locations.
@@ -316,17 +431,34 @@ def sphere_sampling(r_ext, ns, normal_in=False, volume=False):
 	phis = N.random.uniform(size=ns)*2.*N.pi
 	cosths = N.random.uniform(low=-1., high=1., size=ns) # cosine of polar angle uniformly distributed
 	sinths = N.sqrt(1.-cosths**2)
-	normals = N.vstack([sinths*N.cos(phis), sinths*N.sin(phis), cosths])
+	norms = N.vstack([sinths * N.cos(phis), sinths * N.sin(phis), cosths])
 	if volume == False:
-		positions = r_ext*normals
-		if normal_in == True:
-			normals = -normals
-		return positions, normals
+		positions = r_ext * norms
+		if normals:
+			if normal_in == True:
+				norms = -norms
+			return positions, norms
 	else:
 		r_s = r_ext*N.cuberoot(N.random.uniform(size=ns))
-		positions = r_s*normals
-		return positions
-	
+		positions = r_s*norms
+	return positions
+
+def Lambertian_directions_sampling(ns, ang_range, normals=None):
+	# Diffuse divergence from +Z:
+	# development based on eq. 2.12  from [1]
+	xi1 = N.random.uniform(low=0., high=2.*N.pi, size=ns) # Phi
+	if ang_range == 0.:
+		dirs = N.zeros((3, ns))
+		dirs[2] = 1.
+	else:
+		xi2 = N.random.uniform(size=ns) # Rtheta
+		sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
+		dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
+	if normals is not None:
+		dirs = rotate_z_to_normal(dirs, normals)
+	return dirs
+
+
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
 	from sys import path

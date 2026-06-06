@@ -100,10 +100,7 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 		xs = profile[0,:-1]
 		ys = profile[1,:-1]
 		verts = N.array([xs[1:]-xs[0], ys[1:]-ys[0], N.zeros(2)])
-		alpha, beta = N.meshgrid(
-			N.linspace(0, 1, resolution), # parameter along two edges
-			N.linspace(0, 1, resolution)) # parameter between points on edges
-		
+
 		x, y, z = alpha*verts[:,1,None,None]*(1 - beta) + \
 			alpha*verts[:,0,None,None]*beta
 
@@ -140,7 +137,7 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 
 	def mesh(self, resolution):
 		if resolution==None:
-			resolution = 40
+			resolution = 41
 			tri_resolution = 2
 
 		mesh = []

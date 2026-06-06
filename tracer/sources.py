@@ -9,11 +9,28 @@ References:
 
 TODO:
 Systematize source declarations:
-- ray vertices from surface/volume sampling -> could be obtains in the ray_trace_utils.sampling module or, potentally, adding sampling functions to the geometry managers.
+- ray vertices from surface/volume sampling -> could be obtained in the ray_trace_utils.sampling module or, potentally, adding sampling functions to the geometry managers.
 - ray directions directions from normalised directional radiance distributions -> using sampling functions but keeping all radiance preoccupations here.
 	- For surface emissions: cosine weighted
 	- for volume emisison, no cosine weighting?
-- ray energy from total source power or Planckian thermal emisison source 
+- ray energy from total source power or Planckian thermal emisison source
+
+We can try to do something similar to the optics_callables: when we want a source, we use the source name that makes the right source. Sources are defined with
+- a shape sampled, ideally directly from geometry managers (TODO...)
+	- surfaces: rectangles, disks, triangles, polygons, cylinders, cones, frusta, spheres, finally quadrics
+	- volumes: box, sphere, cylinder, cones, frusta
+- a directional distribution of rays: from directional sampling
+	- uniform angles
+	- Buie sunshape
+	- piecewise linear cosine from points when properties are given
+	- piecewise linear when measured flux are given
+- a spectral distribution of rays
+	- Planck
+	- piecewise constant spectrum
+	- Piecewise linear spectrum
+- Spectro-directional:
+	- axi-symmetrical spectro-directional: 2D sampling, with pw linear cosine for [properties and pw linear for fluxes
+	- non axi-symmetrical: 3D smapling with theta, phi and wavelength
 """
 
 from numpy import random, linalg as LA
@@ -22,11 +39,36 @@ from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
 from ray_trace_utils.vector_manipulations import rotate_z_to_normal
 from ray_trace_utils.electromagnetics import Planck
+from ray_trace_utils.sampling import *
+
+def gray_source(shape, location, direction, num_rays, directions_distribution, energy, rays_direction=None):
+	'''
+	General gray ray-source
+	shape and directional distribution are dictionaries with the first key as 'type' to determine which distribution
+	to sample from and the second kwargs which gives a dictionary of keywords and argument values.
+	rays_direction gives a vector in absolute coordinates that teh rays consider as their +z.
+	'''
+
+	shape_sampling = eval(shape['type']+'_sampling')
+	vertices = shape_sampling(ns=num_rays, **shape['kwargs'])
+	vertices = rotate_z_to_normal(vertices, direction)
+	vertices += N.vstack(location)
+
+	directions_sampling = eval(directions_distribution['type']+'_directions_sampling')
+	directions = directions_sampling(ns=num_rays, **directions_distribution['kwargs'])
+	energies = N.ones(num_rays)*energy / num_rays
+	if rays_direction is None:
+		rays_direction = direction
+	else:
+		energies *= N.cos(N.dot(rays_direction, direction))
+	directions = rotate_z_to_normal(directions, rays_direction)
+
+	return RayBundle(vertices=vertices, directions=directions, energy=energies)
 
 def single_ray_source(position, direction, flux=None):
 	'''
-	Establishes a single ray source originating from a definned point on a defined exact 
-	direction for the purpose of testing single ray behviours.
+	Establishes a single ray source originating from a defined point on a defined exact
+	direction for the purpose of testing single ray behaviours.
 
 	Arguments:
 	position - column 3-array with the ray's starting position.
@@ -43,13 +85,17 @@ def single_ray_source(position, direction, flux=None):
 	singray.set_energy(flux*N.ones(1))
 	return singray
 
-def lambertian_directions_sampling(num_rays, ang_range, normals=None):
+def Lambertian_directions(num_rays, ang_range, normals=None):
 	# Diffuse divergence from +Z:
 	# development based on eq. 2.12  from [1]
 	xi1 = random.uniform(low=0., high=2.*N.pi, size=num_rays) # Phi
-	xi2 = random.uniform(size=num_rays) # Rtheta
-	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
-	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
+	if ang_range == 0.:
+		dirs = N.zeros((3, num_rays))
+		dirs[2] = 1.
+	else:
+		xi2 = random.uniform(size=num_rays) # Rtheta
+		sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
+		dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
 	if normals is not None:
 		dirs = rotate_z_to_normal(dirs, normals)
 	return dirs
@@ -68,7 +114,7 @@ def pillbox_sunshape_directions(num_rays, ang_range):
 	A (3, num_rays) array whose each column is a unit direction vector for one
 		ray, distributed to match a pillbox sunshape.
 	"""
-	return lambertian_directions_sampling(num_rays, ang_range)
+	return Lambertian_directions(num_rays, ang_range)
 
 def bivariate_directions(num_rays, ang_range_hor, ang_range_vert):
 	"""
@@ -281,14 +327,11 @@ def edge_rays_bundle(num_rays,  center,  direction,  radius, ang_range, flux=Non
 		rayb.set_energy(N.pi*(radius**2.-radius_in**2.)/num_rays*flux*N.ones(num_rays))
 	return rayb
 
-def buie_distribution(num_rays, CSR, pre_process_CSR=True):
+def Buie_directions_sampling(num_rays, CSR, pre_process_CSR=True):
 	
 	# Angles of importance:
 	theta_dni = 4.65e-3 # rad
 	theta_tot = 43.6e-3 # rad
-
-	# Polar angle array:
-	thetas = N.zeros(num_rays)
 
 	# Discrete random ray directions generation according to Buie sunshape
 	# Step 1: integration over the whole Sunshape: 
@@ -403,7 +446,7 @@ def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_proce
 	energy = N.ones(num_rays)*flux*S/num_rays*N.cos(cosangle)
 
 	# Buie sunshape directions:
-	a = buie_distribution(num_rays, CSR, pre_process_CSR)
+	a = Buie_directions_sampling(num_rays, CSR, pre_process_CSR)
 
 	# Rotate to a frame in which <rays_direction> is Z:
 	perp_rot = rotation_to_z(rays_direction)
@@ -454,7 +497,7 @@ def rect_buie_sunshape(num_rays, center, direction, width, height, CSR, flux=Non
 	energy = N.ones(num_rays)*flux*S/num_rays*N.cos(cosangle)
 
 	# Buie sunshape directions:
-	a = buie_distribution(num_rays, CSR, pre_process_CSR)
+	a = Buie_directions_sampling(num_rays, CSR, pre_process_CSR)
 
 	# Rotate to a frame in which <rays_direction> is Z:
 	perp_rot = rotation_to_z(rays_direction)

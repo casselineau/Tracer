@@ -9,10 +9,10 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 	Arguments:
 	VF - view factor matrix of the geometry calculated
 	areas - areas of the view factor elements (m2)
-	eps - emissivity of the surfaces, can be an array decribing descrete emissivity values or a single number applicable to all surfaces except the aperture.
+	eps - emissivity of the surfaces, can be an array describing discrete emissivity values or a single number applicable to all surfaces except the aperture.
 	Tamb - ambiant temperature (K)
 	Twall - wall boundary condition, can be an array decribing descrete temperature values or a single number applicable to all surfaces except the aperture (K)
-	inc_radiation - specifies the ratiative power coming to the surface (W/m2) and is used if no temperature is given to determine the thermal emissions.
+	inc_radiation - specifies the radiative power coming to the surface (W/m2) and is used if no temperature is given to determine the thermal emissions.
 	q_net - specifies the net radiative heat enforced in the surface. q_net is subtracted from inc_radiation if the latter is declared.
 
 	Returns:
@@ -28,7 +28,7 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 
 	if len(eps) != len(areas):
 		raise AttributeError
-	if (T == None) and (inc_radiation == None):
+	if (T is None) and (inc_radiation is None):
 		raise AttributeError
 	# The radiosity problem is formulated as [AA][J]=[bb], and the following matrices are
 	# defined:
@@ -36,14 +36,14 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 	bb = N.zeros(n)
 	AA[N.diag_indices(n)] = 1.
 	# Boundary conditions. Error raised if none or both of flux and tempreature are fixed at the boundary.
-	if (inc_radiation!=None) and (T!=None):
+	if (inc_radiation is not None) and (T is not None):
 		# If no BC in any element, raise error:
 		if N.logical_and(N.isnan(T), N.isnan(inc_radiation)).any():
 			raise AttributeError('At least one element has no boundary condition for radiosity')
 		# If BC has double definition, raise error:
 		if N.logical_and(~N.isnan(T), ~N.isnan(inc_radiation)).any():
 			raise AttributeError('At least one element has two boundary condition definitions for radiosity')
-	if (inc_radiation != None): # Flux
+	if (inc_radiation is not None): # Flux
 		bb[~N.isnan(inc_radiation)] += inc_radiation[~N.isnan(inc_radiation)]
 		AA[~N.isnan(inc_radiation)] += -VF[~N.isnan(inc_radiation)]
 	else:  # Temperature
@@ -55,7 +55,7 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 	if (N.isnan(bb).any()):
 		raise AttributeError('Wrong right hand side')
 	if N.isnan(AA).any():
-		print AA
+		print (AA)
 		stop
 
 	# Matrix inversion:
@@ -63,7 +63,6 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 
 	# Calculate element-wise flux density q and total flux Q.
 	q = N.zeros(n)
-	Q = N.zeros(n)
 	E = N.zeros(n)
 
 	for i in range(n):

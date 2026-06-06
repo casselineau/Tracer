@@ -55,7 +55,10 @@ def axes_and_angles_between(vecs, normal):
 	
 def rotate_z_to_normal(vecs, normals):
 	'''
-	Rotate vecs so that they consider normals as their +z. The rotation matrix is established so that it is the minimal rotation along the plane formed between each direction and their respective normal unlike the rotate_to_z alternative in the tracer.spatial_geometry module.
+	Rotate vecs so that they consider normals as their +z.
+	The rotation matrix is established so that it is the minimal rotation
+	along the plane formed between each direction and their respective normal
+	unlike the rotate_to_z alternative in the tracer.spatial_geometry module.
 	'''
 	zs = N.zeros((vecs.shape))
 	zs[2] = 1.
@@ -67,7 +70,6 @@ def rotate_z_to_normal(vecs, normals):
 			rots.append(general_axis_rotation(axes[:,i], angles[i]))
 		else:
 			rots.append(N.eye(3))
-
 	vecs = N.einsum('nij, jn->in', rots, vecs)
 
 	return vecs
@@ -84,6 +86,8 @@ def get_plane_normals(v1, v2):
 	# returns the normal to a plane defined by v1 and v2
 	plane = N.cross(v1, v2).T
 	plane /= N.sqrt(N.sum(plane**2, axis=0))
+	nans = N.isnan(plane[0])
+	plane[:, nans] = N.array([[1., 0., 0.]]).T
 	return plane
 
 def AABB(vecs):
