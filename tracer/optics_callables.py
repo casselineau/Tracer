@@ -894,14 +894,15 @@ class LambertianAbsorbant(Lambertian, Absorbant):
 	'''
 	def __init__(self, absorptivity=0., attenuation_coefficient=0., ang_range=N.pi/2., scaling=1.):
 		self._absorptivity=absorptivity
-		Lambertian.__init__(self, absorptivity=1., ang_range=ang_range) # this makes differentiating between attenuationa nd absorption easier.
+		Lambertian.__init__(self, absorptivity=0., ang_range=ang_range) # this makes differentiating between attenuationa nd absorption easier.
 		Absorbant.__init__(self, attenuation_coefficient, scaling)
 
 	def __call__(self, geometry, rays, selector):
 		outg = Lambertian.__call__(self, geometry, rays, selector)
 		self.attenuate(rays, outg)
 		incident_ener = outg.get_energy()
-		self.attenuations = incident_ener - rays.get_energy(selector)
+		self.attenuations = rays.get_energy(selector) - incident_ener
+		print(rays.get_energy(selector), self.attenuations, incident_ener, incident_ener * (1. - self._absorptivity))
 		outg.set_energy(incident_ener*(1.-self._absorptivity))
 		return outg
 
@@ -1948,14 +1949,15 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 
 		def __call__(self, geometry, rays, selector):
 			new_bundle = OpticsCallable.__call__(self, geometry, rays, selector)
-			kwargs = {'geometry':geometry, 'rays':rays, 'selector':selector, 'new_bundle':new_bundle}
 			# check if we need an additional variable for the count function, used to pass through values from
 			# the OpticsCallable to the accountant
 			for a in self.accountants:
-				vars = a.__code__.co_varnames
+				kwargs = {'geometry': geometry, 'rays': rays, 'selector': selector, 'new_bundle': new_bundle}
+				vars = list(a.count.__code__.co_varnames[:a.count.__code__.co_argcount])
+				vars.remove('self')
 				for v in vars:
 					if v not in kwargs:
-						kwargs.update({v:eval('OpticsCallable.'+v)})
+						kwargs.update({v:eval('self._opt.'+v)})
 				a.count(**kwargs)
 			return new_bundle
 
