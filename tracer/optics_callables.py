@@ -2042,6 +2042,7 @@ def make_accountant_classes(optical_class):
 		newclass = optical_class.__name__ + accountant_name
 		make_mixed_accountant_class(newclass, accs, optical_class)
 		alias_check = [k for k in aliases.keys() if k in accountant_name]
+
 		for k in alias_check:
 			newclass_alias = newclass.replace(k, aliases[k])
 			make_mixed_accountant_class(newclass_alias, accs, optical_class)
@@ -2055,11 +2056,11 @@ accountants = []
 # TODO: decide this, split spectral and polychromatic, associate polychromatic with energy processing and change order decided so far.
 # Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
 # Within each category, do alphabetical
-accountant_types = ['Absorption', 'Attenuation', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
+accountant_types = ['Attenuation', 'Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
 for at in accountant_types:
 	accountants.extend([a for a in accountants_raw if at in a.__name__])
 # Aliases to make declaration easier for common accountants and ensure backward compatibility
-# TODO: DEal with repeats in aliases and output order
+# TODO: Deal with repeats in aliases and output order
 aliases = {'LocationAbsorber':'Receiver', 'DirectionalLocationAbsorber':'Detector', 'LocationScatterer':'Transmitter'}
 mixed_accountants = []
 for i in range(1, len(accountants)):
