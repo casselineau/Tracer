@@ -902,7 +902,6 @@ class LambertianAbsorbant(Lambertian, Absorbant):
 		self.attenuate(rays, outg)
 		incident_ener = outg.get_energy()
 		self.attenuations = rays.get_energy(selector) - incident_ener
-		print(rays.get_energy(selector), self.attenuations, incident_ener, incident_ener * (1. - self._absorptivity))
 		outg.set_energy(incident_ener*(1.-self._absorptivity))
 		return outg
 
@@ -1967,6 +1966,7 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 
 		def get_all_hits(self):
 			output = []
+			print (self.accountants)
 			for a in self.accountants:
 				output.append(a.get_data())
 			return output
@@ -2044,13 +2044,14 @@ def make_polychromatic_accountant_class(name, parent):
 def make_accountant_classes(optical_class):
 	for accs in mixed_accountants:
 		names = [a().shorthand for a in accs]
-		accountant_name = ''.join(names[::-1])
+		accountant_name = ''.join(names)
 		newclass = optical_class.__name__ + accountant_name
 		make_mixed_accountant_class(newclass, accs, optical_class)
-		alias_check = [k for k in aliases.keys() if k in accountant_name]
-
+		alias_check = [k for k in aliases.keys() if all(ak in accountant_name for ak in aliases[k])]
 		for k in alias_check:
-			newclass_alias = newclass.replace(k, aliases[k])
+			for a in aliases[k]:
+				newclass = newclass.replace(a, '')
+			newclass_alias = newclass+k
 			make_mixed_accountant_class(newclass_alias, accs, optical_class)
 
 # Make all accountant combinations to then use in making the optics callable classes with accountant composition
@@ -2060,14 +2061,18 @@ def make_accountant_classes(optical_class):
 accountants_raw = Accountant.__subclasses__()
 accountants = []
 # TODO: decide this, split spectral and polychromatic, associate polychromatic with energy processing and change order decided so far.
-# Current order: accountants to respect get_all_hits() output convention: energy (absorbed or scattered), wavelengths or spectra, hits, directions
-# Within each category, do alphabetical
-accountant_types = ['Attenuation', 'Absorption', 'Reception', 'Scattering', 'Polychromatic', 'Spectral', 'Location', 'Direction', 'Normal']
+# Current order: accountants to respect get_all_hits() output convention: energy (absorbed, attenuated, received or scattered), wavelengths or spectra, hits, directions, normals
+ener_accs = ['Absorption', 'Attenuation', 'Reception', 'Scattering']
+spectral_acccs = ['Polychromatic', 'Spectral']
+location_accs = ['Location']
+directions_accs = ['Direction', 'Normal']
+accountant_types = [ener_accs, spectral_acccs, location_accs, directions_accs]
 for at in accountant_types:
-	accountants.extend([a for a in accountants_raw if at in a.__name__])
+	for a in at:
+		accountants.extend([ax for ax in accountants_raw if a in ax.__name__])
 # Aliases to make declaration easier for common accountants and ensure backward compatibility
-# TODO: Deal with repeats in aliases and output order
-aliases = {'LocationAbsorber':'Receiver', 'DirectionalLocationAbsorber':'Detector', 'LocationScatterer':'Transmitter'}
+# TODO: Deal with output order. mostly done but needs checking. Alias is always at the end in order of alias.
+aliases = {'Receiver':['Location', 'Absorber'], 'Detector':['Directional','Location','Absorber'], 'Transmitter':['Location','Scatterer']}
 mixed_accountants = []
 for i in range(1, len(accountants)):
 	mix = (list(tup) for tup in combinations(accountants, i))
