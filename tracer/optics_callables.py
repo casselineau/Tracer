@@ -1680,7 +1680,7 @@ class AttenuationAccountant(Accountant):
 		Returns:
 		the energy incident at each hit-point
 		"""
-		if not len(self._received):
+		if not len(self._attenuated):
 			return N.array([])
 
 		return N.hstack([a for a in self._attenuated if len(a)])
