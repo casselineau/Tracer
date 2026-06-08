@@ -905,9 +905,6 @@ class LambertianAbsorbant(Lambertian, Absorbant):
 		outg.set_energy(incident_ener*(1.-self._absorptivity))
 		return outg
 
-	def get_attenuations(self):
-		return self.attenuations
-
 class RefractiveAbsorbant(Refractive, Absorbant):
 	'''
 	Same as RefractiveHomogenous but with absoption in the medium. This is an approximation where we only consider attenuation in the medium but not its influence on the fresnel coefficients.
@@ -1641,8 +1638,8 @@ class AbsorptionAccountant(Accountant):
 	def count(self, geometry, rays, selector, new_bundle):
 		ein = rays.get_energy(selector)
 		eout = new_bundle.get_energy()
-		if hasattr(self, 'get_attenuations'):
-			ein -= self.get_attenuations()
+		if hasattr(self, 'attenuations'):
+			ein -= self.attenuations
 		self._absorbed.append(ein - eout)
 
 	def get_data(self):
@@ -1670,8 +1667,8 @@ class AttenuationAccountant(Accountant):
 		"""Clear the memory of hits (best done before a new trace)."""
 		self._attenuated = []
 
-	def count(self, geometry, rays, selector, new_bundle):
-		self._attenuated.append(self.get_attenuations())
+	def count(self, geometry, rays, selector, new_bundle, attenuations):
+		self._attenuated.append(attenuations)
 
 	def get_data(self):
 		"""
@@ -1951,8 +1948,15 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 
 		def __call__(self, geometry, rays, selector):
 			new_bundle = OpticsCallable.__call__(self, geometry, rays, selector)
+			kwargs = {'geometry':geometry, 'rays':rays, 'selector':selector, 'new_bundle':new_bundle}
+			# check if we need an additional variable for the count function, used to pass through values from
+			# the OpticsCallable to the accountant
 			for a in self.accountants:
-				a.count(geometry, rays, selector, new_bundle)
+				vars = a.__code__.co_varnames
+				for v in vars:
+					if v not in kwargs:
+						kwargs.update({v:eval('OpticsCallable.'+v)})
+				a.count(**kwargs)
 			return new_bundle
 
 		def reset(self):
