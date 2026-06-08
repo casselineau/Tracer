@@ -901,7 +901,7 @@ class LambertianAbsorbant(Lambertian, Absorbant):
 		outg = Lambertian.__call__(self, geometry, rays, selector)
 		self.attenuate(rays, outg)
 		incident_ener = outg.get_energy()
-		self.attenuations = incident_ener - rays.get_energy()
+		self.attenuations = incident_ener - rays.get_energy(selector)
 		outg.set_energy(incident_ener*(1.-self._absorptivity))
 		return outg
 
