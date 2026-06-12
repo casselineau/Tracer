@@ -71,7 +71,6 @@ def rotate_z_to_normal(vecs, normals):
 		else:
 			rots.append(N.eye(3))
 	vecs = N.einsum('nij, jn->in', rots, vecs)
-
 	return vecs
 
 def project_on_plane(v1, normal):

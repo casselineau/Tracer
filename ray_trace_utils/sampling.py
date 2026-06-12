@@ -420,7 +420,6 @@ def frustum_sampling(r0, r1, z0, z1, ns, normals=False, normal_in=False, volume=
 		rzs = r0 + c * z
 		rs  = rzs * N.sqrt(R)
 		positions = N.array([rs*N.cos(phi), rs*N.sin(phi), zs])
-
 	return positions
 	
 def sphere_sampling(r_ext, ns, normals=False, normal_in=False, volume=False):

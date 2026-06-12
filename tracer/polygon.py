@@ -39,9 +39,11 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 		across_y = N.logical_xor(y_pos[:,:-1], y_pos[:,1:])
 		inters = N.logical_and(beyond_x, across_y)
 
-		# For segments with x on both sides of the point: find where the intersection parameter and the positive params are valid
+		# For segments with x on both sides of the point:
+		# find where the intersection parameter and the positive params are valid
 		across_x = N.logical_xor(x_pos[:,:-1], x_pos[:,1:])
 		doubt = N.nonzero(N.logical_and(across_x, across_y))
+
 		# If there is a doubt for an intersection
 		for i in range(len(doubt[0])):
 			inters[doubt[0][i],doubt[1][i]] = self.intersect(points[:2,doubt[0][i]], profile[:,doubt[1][i]:doubt[1][i]+2])
@@ -61,7 +63,7 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 		return inter
 
 	def mesh(self, resolution):
-		if resolution==None:
+		'''if resolution==None:
 			resolution=2
 		alpha, beta = N.meshgrid(
 			N.linspace(0, 1, resolution), # parameter along two edges
@@ -88,7 +90,7 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 					xs = profile[0,i:i+3]
 					ys = profile[1,i:i+3]
 					verts = N.array([xs[1:]-xs[0], ys[1:]-ys[0], N.zeros(2)])
-					
+
 					x, y, z = alpha*verts[:,1,None,None]*(1 - beta) + \
 						alpha*verts[:,0,None,None]*beta
 					mesh.append(x+xs[0])
@@ -107,8 +109,32 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 		mesh.append(x+xs[0])
 		mesh.append(y+ys[0])
 		mesh.append(z)
-		return mesh
+		return mesh'''
+		tri_resolution = 2
+		if resolution is None:
+			resolution = 41
 
+		mesh = []
+
+		poly = S.Polygon(self.profile.T)
+		triangles = S.constrained_delaunay_triangles(poly)
+		for t in triangles.geoms:
+			xt, yt = t.exterior.xy
+			xt = N.array(xt[:-1], dtype=N.float64)
+			yt = N.array(yt[:-1], dtype=N.float64)
+			verts = N.array([xt[1:] - xt[0], yt[1:] - yt[0], N.zeros(2)])
+			alpha, beta = N.meshgrid(
+				N.linspace(0, 1, tri_resolution),  # parameter along two edges
+				N.linspace(0, 1, tri_resolution))  # parameter between points on edges
+
+			x, y, z = alpha * verts[:, 1, None, None] * (1 - beta) + \
+					  alpha * verts[:, 0, None, None] * beta
+
+			mesh.append(x+xt[0])
+			mesh.append(y+yt[0])
+			mesh.append(N.zeros(N.shape(x)))
+
+		return mesh
 
 class PerforatedPolygonGM(FlatSimplePolygonGM):
 
@@ -117,9 +143,9 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 		extr_centers (2,n) is an array of n 2 component center of circular perforation locations in locall coordiantes
 		extr_radii is (1,n) array of radii, one for each center.
 		'''
-		FlatSimplePolygonGM.__init__(self, profile)
 		self.extr_centers = extr_centers
 		self.extr_radii = extr_radii
+		FlatSimplePolygonGM.__init__(self, profile)
 
 	def find_intersections(self, frame, ray_bundle):
 
@@ -135,10 +161,10 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 		del self._local
 		return ray_prms
 
-	def mesh(self, resolution):
-		if resolution==None:
+	def mesh(self, resolution=None):
+		tri_resolution = 2
+		if resolution is None:
 			resolution = 41
-			tri_resolution = 2
 
 		mesh = []
 
@@ -166,7 +192,7 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 
 		if poly.geom_type == 'Polygon':
 			triangles = S.constrained_delaunay_triangles(poly)
-			for i, t in enumerate(triangles.geoms):
+			for t in triangles.geoms:
 				xt, yt = t.exterior.xy
 				xt = N.array(xt[:-1], dtype=N.float64)
 				yt = N.array(yt[:-1], dtype=N.float64)
@@ -177,9 +203,11 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 
 				x, y, z = alpha * verts[:, 1, None, None] * (1 - beta) + \
 						  alpha * verts[:, 0, None, None] * beta
+
 				mesh.append(x+xt[0])
 				mesh.append(y+yt[0])
 				mesh.append(N.zeros(N.shape(x)))
+
 		elif poly.geom_type == 'MultiPolygon':
 			for p in poly.geoms:
 				triangles = S.constrained_delaunay_triangles(p)
@@ -194,7 +222,9 @@ class PerforatedPolygonGM(FlatSimplePolygonGM):
 
 					x, y, z = alpha * verts[:, 1, None, None] * (1 - beta) + \
 							  alpha * verts[:, 0, None, None] * beta
+
 					mesh.append(x + xt[0])
 					mesh.append(y + yt[0])
 					mesh.append(N.zeros(N.shape(x)))
+
 		return mesh

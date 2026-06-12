@@ -119,7 +119,7 @@ class FiniteCone(InfiniteCone):
 
 		return select
 	
-	def mesh(self, resolution=40):
+	def mesh(self, resolution=None):
 		"""
 		Represent the surface as a mesh in local coordinates. Uses polar
 		bins, i.e. the points are equally distributed by angle and radius,
@@ -133,6 +133,8 @@ class FiniteCone(InfiniteCone):
 		x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
 			coordinate (respectively) of point (i,j) in the mesh.
 		"""
+		if resolution is None:
+			resolution = 40
 		# Generate a circular-edge mesh using polar coordinates.
 		rc = self.c * (self.h - self.a)
 		rmin = rc/resolution
