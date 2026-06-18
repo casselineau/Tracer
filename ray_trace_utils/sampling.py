@@ -1,6 +1,7 @@
 import numpy as N
 from scipy.interpolate import RegularGridInterpolator
 from shapely import Polygon, constrained_delaunay_triangles
+from ray_trace_utils.vector_manipulations import rotate_z_to_normal
 
 class PW_linear_distribution(object):
 
@@ -277,7 +278,7 @@ def pw_linear_importance_sampling(dist, ns):
 	ns the number of samples
 	'''
 	sampling_dist = PW_linear_distribution(dist.xs, dist(dist.xs))
-	x_s, weights_s = dist.sample(ns)
+	x_s, weights_s = sampling_dist.sample(ns)
 	weights = weights_s*dist.PDF(x_s)
 	weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
 	return x_s, weights
@@ -372,7 +373,7 @@ def cylinder_sampling(r_ext, h, ns, normals=False, normal_in=False, volume=False
 		positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
 		if normals:
 			normals = N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
-			if normal_in == False:
+			if normal_in == True:
 				normals = -normals
 			return positions, normals
 	else:

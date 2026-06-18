@@ -50,12 +50,12 @@ def gray_source(shape, location, direction, num_rays, directions_distribution, e
 	'''
 
 	shape_sampling = eval(shape['type']+'_sampling')
-	vertices = shape_sampling(ns=num_rays, **shape['kwargs'])
+	vertices, normals = shape_sampling(ns=num_rays, **shape['kwargs'])
 	vertices = rotate_z_to_normal(vertices, direction)
 	vertices += N.vstack(location)
 
 	directions_sampling = eval(directions_distribution['type']+'_directions_sampling')
-	directions = directions_sampling(ns=num_rays, **directions_distribution['kwargs'])
+	directions = directions_sampling(ns=num_rays, normals=normals, **directions_distribution['kwargs'])
 	energies = N.ones(num_rays)*energy / num_rays
 	if rays_direction is None:
 		rays_direction = direction
