@@ -56,13 +56,13 @@ class KdTree(object):
 		maxpoints = N.empty((3,total_bounds))
 		bounds = N.empty((3,2*total_bounds))
 		
-		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used by the traversal algorithm to always make the listed objects relevant in the ray-trace.
 		i = 0
 		# load all the data
 
+		arrays = []
 		for index, bounds_o in enumerate(boundaries):
 			if bounds_o == []:
-				self.always_relevant.append(idx_surfs_per_object[index])
+				arrays.append(idx_surfs_per_object[index])
 			else:
 				for b in bounds_o:
 					minpoints[:,i] = b._minpoint
@@ -70,7 +70,10 @@ class KdTree(object):
 					bounds[:,2*i] = b._minpoint
 					bounds[:,2*i+1] = b._maxpoint
 					i+=1
-		self.always_relevant = N.hstack(self.always_relevant)
+		self.always_relevant = (
+			N.concatenate(arrays) if arrays else N.array([], dtype=int)
+		) # This handles all situations in which we have no declared boundaries. This attribute gets used by the traversal algorithm to always make the listed objects relevant in the ray-trace.
+		
 
 		# find the largest bounding box
 		self.minpoint, self.maxpoint = AABB(bounds)
