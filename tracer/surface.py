@@ -186,7 +186,10 @@ class Surface(HasFrame):
 			if fluxmap is not None:
 				if hasattr(o,'get_all_hits'):
 					hitdata = o.get_all_hits()
-					xyz = self.global_to_local(hitdata[1])[:3]
+					for h in hitdata:
+						if h.shape[0] == 3:
+							xyz = self.global_to_local(h)[:3]
+							break
 					# plot the histogram into the scenegraph
 					g = self.get_geometry_manager()
 					if hasattr(g, 'get_fluxmap'):

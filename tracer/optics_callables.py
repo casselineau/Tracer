@@ -13,7 +13,7 @@ from ray_trace_utils.vector_manipulations import get_angle, rotate_z_to_normal
 from tracer.spatial_geometry import rotz, general_axis_rotation
 from abc import ABC, abstractmethod
 from itertools import combinations
-from copy import copy
+from copy import deepcopy
 
 import sys, inspect
 
@@ -83,9 +83,9 @@ Optical manager lock to automaticlaly prevent issues with a single optical manag
 '''
 def copy_optical_manager(opt):
 	'''
-	To easily make copies of teh same setup for several objects
+	To easily make copies of the same setup for several objects
 	'''
-	newopt = copy(opt)
+	newopt = deepcopy(opt)
 	if hasattr(newopt, 'reset'):
 		newopt.reset()
 	return newopt
@@ -1966,7 +1966,6 @@ def make_mixed_accountant_class(name, accountants, optics_class):
 
 		def get_all_hits(self):
 			output = []
-			print (self.accountants)
 			for a in self.accountants:
 				output.append(a.get_data())
 			return output
