@@ -6,7 +6,7 @@ from tracer.surface import *
 from tracer.object import *
 from tracer.boundary_shape import BoundaryBox
 from tracer.spatial_geometry import roty, rotz
-from vector_manipulations import AABB, get_plane_normal
+from .vector_manipulations import AABB, get_plane_normal
 
 def cylinder_verts_faces(radius, length, angbins=24, lbins=10, capped=False):
 	'''
