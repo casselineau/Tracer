@@ -175,7 +175,12 @@ class FiniteFlatGM(FlatGeometryManager):
 			are active.
 		"""
 		self._idxs = idxs
-		self._backside = N.nonzero(self._backside[idxs])[0]
+
+		if hasattr(self, "_backside"):
+			self._backside = N.nonzero(self._backside[idxs])[0]
+		else:
+			self._backside = N.array([], dtype=int)
+
 		self._global = self._global[:,idxs].copy()
 
 class RectPlateGM(FiniteFlatGM):
