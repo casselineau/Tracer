@@ -272,13 +272,16 @@ class IAM(object):
 	def __init__(self, a_r, c=1):
 		self.a_r = a_r
 		self.c = c
+		
+	def reflectance(self, cos_theta_AOI):
+		return (1.-self._abs)*(1. -N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))
 
 	def __call__(self, geometry, rays, selector):
 		normals = geometry.get_normals()
 		directions = rays.get_directions(selector)
 		vertical = N.sum(directions * normals, axis=0) * normals
 		cos_theta_AOI = N.sqrt(N.sum(vertical ** 2, axis=0))
-		return rays.get_energy(selector)*(1.-self._abs)*(1. -N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))
+		return rays.get_energy(selector)*self.reflectance(cos_theta_AOI)
 
 class Reflective_IAM(Reflective, IAM):
 	'''
@@ -291,7 +294,7 @@ class Reflective_IAM(Reflective, IAM):
 		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
-		outg = Reflective(self, geometry, rays, selector)
+		outg = Reflective.__call__(self, geometry, rays, selector)
 		reflected = IAM.__call__(self , geometry, rays, selector)
 		outg.set_energy(reflected)
 		'''if outg.has_property('spectra'):
