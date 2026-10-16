@@ -119,7 +119,7 @@ Reference:
 
 		self.r.addChild(self.sim._asm.get_scene_graph(resolution, fluxmap, trans, vmin, vmax, bounding_boxes))
 
-	def show_geom(self, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None, bounding_boxes=None):
+	def show_geom(self, resolution=None, fluxmap=False, trans=False, vmin=None, vmax=None, bounding_boxes=None):
 		self.geom(resolution, fluxmap, trans, vmin, vmax, bounding_boxes)
 		self.show()
 

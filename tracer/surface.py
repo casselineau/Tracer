@@ -151,104 +151,165 @@ class Surface(HasFrame):
 		import matplotlib.cm as cm
 		from matplotlib import colors
 
+		def face_centers(X, Y, Z):
+			Xc = 0.25 * (X[:-1, :-1] + X[:-1, 1:] + X[1:, :-1] + X[1:, 1:])
+			Yc = 0.25 * (Y[:-1, :-1] + Y[:-1, 1:] + Y[1:, :-1] + Y[1:, 1:])
+			Zc = 0.25 * (Z[:-1, :-1] + Z[:-1, 1:] + Z[1:, :-1] + Z[1:, 1:])
+			return Xc.flatten(), Yc.flatten(), Zc.flatten()
+
 		n0 = self.get_scene_graph_transform()
 		o = self.get_optics_manager()
+		meshes = self._geom.get_scene_graph(resolution)
+
+		fluxmap = None
+		base_mat_kwargs = None
 
 		if self._fixed_color:
-			mat = coin.SoMaterial()
-			mat.diffuseColor = self._fixed_color
-			mat.specularColor = self._fixed_color
-			mat.transparency = (self._transparency)
-			n0.addChild(mat)
+			base_mat_kwargs = dict(
+				diffuseColor=self._fixed_color,
+				specularColor=self._fixed_color,
+				transparency=self._transparency
+			)
 			fluxmap = False
+
 		else:
+			#fluxmap = True
+
 			if o.__class__.__name__[-10:] == 'Reflective':
-				mat = coin.SoMaterial()
-				mat.diffuseColor = (.5,.5,.5)
-				mat.specularColor = (.6,.6,.6)
-				#mat.shininess = o._abs
-				n0.addChild(mat)
+				base_mat_kwargs = dict(
+					diffuseColor=(0.5, 0.5, 0.5),
+					specularColor=(0.6, 0.6, 0.6)
+				)
 				fluxmap = False
 
-			if o.__class__.__name__ == 'PeriodicBoundary':
-				mat = coin.SoMaterial()
-				mat.ambientColor = (.0,.5,.5)
-				mat.transparency = (0.8)
-				n0.addChild(mat)
+			elif o.__class__.__name__ == 'PeriodicBoundary':
+				base_mat_kwargs = dict(
+					diffuseColor=(0.0, 0.5, 0.5),
+					transparency=0.8
+				)
 				fluxmap = False
 
-			if 'RefractiveAbsorbant' in o.__class__.__name__:
-				mat = coin.SoMaterial()
-				mat.ambientColor = (1,1,1)
-				mat.transparency = (0.8)
-				n0.addChild(mat)
-				
-			if fluxmap is not None:
-				if hasattr(o,'get_all_hits'):
+			elif 'Refractive' in o.__class__.__name__:
+				base_mat_kwargs = dict(
+					diffuseColor=(.8, .8, 1.0),
+					transparency=1.
+				)
+				fluxmap = False
+
+			if fluxmap:
+				if hasattr(o, 'get_all_hits'):
 					hitdata = o.get_all_hits()
+					xyz = None
 					for h in hitdata:
 						if h.shape[0] == 3:
 							xyz = self.global_to_local(h)[:3]
 							break
-					# plot the histogram into the scenegraph
+
 					g = self.get_geometry_manager()
-					if hasattr(g, 'get_fluxmap'):
+					if hasattr(g, 'get_fluxmap') and xyz is not None:
 						flux = g.get_fluxmap(hitdata[0], xyz, resolution)
-						if not(hasattr(flux[0],'__len__')):
+						if not hasattr(flux[0], '__len__'):
 							flux = [flux]
 					else:
 						fluxmap = False
 				else:
 					fluxmap = False
-			else: 
-				mat = coin.SoMaterial()
-				mat.diffuseColor = (0.2,0.2,0.2)
-				mat.specularColor = (0.2,0.2,0.2)
-				n0.addChild(mat)
-				fluxmap = False
 
-		meshes = self._geom.get_scene_graph(resolution)
-		for m in range(int(len(meshes)/3)):
+			if base_mat_kwargs is None and not fluxmap:
+				base_mat_kwargs = dict(
+					diffuseColor=(0.2, 0.2, 0.2),
+					specularColor=(0.2, 0.2, 0.2)
+				)
+
+		for m in range(int(len(meshes) / 3)):
 			n = coin.SoSeparator()
 
-			X,Y,Z = meshes[3*m:3*m+3]
-			nr,nc = X.shape
-			A = [(X.flat[i],Y.flat[i],Z.flat[i]) for i in range(len(X.flat))]
-			coor = coin.SoCoordinate3()
-			coor.point.setValues(0, len(A), A)
-			n.addChild(coor)
+			X, Y, Z = meshes[3 * m:3 * m + 3]
+			nr, nc = X.shape
 
-			qm = coin.SoQuadMesh()
-			qm.verticesPerRow = nc
-			qm.verticesPerColumn = nr
-			n.addChild(qm)
+			pts = [(float(X.flat[k]), float(Y.flat[k]), float(Z.flat[k]))
+				   for k in range(X.size)]
+
+			coor = coin.SoCoordinate3()
+			coor.point.setValues(0, len(pts), pts)
+			n.addChild(coor)
 
 			sh = coin.SoShapeHints()
 			sh.shapeType = coin.SoShapeHintsElement.UNKNOWN_SHAPE_TYPE
 			sh.vertexOrdering = coin.SoShapeHintsElement.COUNTERCLOCKWISE
 			sh.faceType = coin.SoShapeHintsElement.UNKNOWN_FACE_TYPE
+			sh.twoSidedLighting = True
 			n.addChild(sh)
 
-			if fluxmap:
+			def vid(i, j):
+				return i * nc + j
 
-				# It works using n0 instead of n here but I have absolutely not clue why.
+			coord_index = []
+			for i in range(nr - 1):
+				for j in range(nc - 1):
+					coord_index.extend([
+						vid(i, j),
+						vid(i, j + 1),
+						vid(i + 1, j + 1),
+						vid(i + 1, j),
+						coin.SO_END_FACE_INDEX
+					])
+
+			nfaces = (nr - 1) * (nc - 1)
+
+			mat = coin.SoMaterial()
+			bind = coin.SoMaterialBinding()
+
+			if fluxmap:
 				norm = colors.Normalize(vmin=vmin, vmax=vmax)
 				M = cm.ScalarMappable(norm=norm, cmap=cm.viridis)
-				colormap = M.to_rgba(flux[m])
-				mat = coin.SoMaterial()
-				mat.ambientColor = (1,1,1)
-				mat.diffuseColor.setValues(0, colormap.shape[0], colormap)
-				if trans==True:
-					mat.transparency.setValues(0,colormap.shape[0], 1.-flux[m]/N.amax(flux[m]))
-				n0.addChild(mat)
+				rgba = M.to_rgba(flux[m])
 
-				mymatbind = coin.SoMaterialBinding()
-				mymatbind.value = coin.SoMaterialBinding.PER_FACE
-				n0.addChild(mymatbind)
-			
+				rgb = [tuple(map(float, c[:3])) for c in rgba]
+				mat.diffuseColor.setValues(0, nfaces, rgb)
+				#mat.ambientColor.setValues(0, nfaces, rgb)
+
+				if trans == True:
+					alpha = 1.0 - flux[m] / N.amax(flux[m])
+					mat.transparency.setValues(0, nfaces, alpha)
+
+				bind.value = coin.SoMaterialBinding.PER_FACE
+
+			if trans == 'quarter':
+				Xc, Yc, Zc = face_centers(X, Y, Z)
+				mask = (Xc >= 0.0)
+
+				transparency = N.where(mask, 1.0, 0.0).astype(float)
+				
+				if base_mat_kwargs and 'diffuseColor' in base_mat_kwargs:
+					base_rgb = tuple(base_mat_kwargs['diffuseColor'])
+				else:
+					base_rgb = (0.2, 0.2, 0.2)
+
+				colors_per_face = [base_rgb] * nfaces
+
+				mat.diffuseColor.setValues(0, nfaces, colors_per_face)
+				#mat.ambientColor.setValues(0, nfaces, colors_per_face)
+				#mat.specularColor.setValues(0, nfaces, black)
+				#mat.emissiveColor.setValues(0, nfaces, black)
+				mat.transparency.setValues(0, nfaces, transparency)
+
+				bind.value = coin.SoMaterialBinding.PER_FACE
+
+			else:
+				if base_mat_kwargs:
+					for key, value in base_mat_kwargs.items():
+						setattr(mat, key, value)
+
+				bind.value = coin.SoMaterialBinding.OVERALL
+
+			n.addChild(mat)
+			n.addChild(bind)
+
+			ifs = coin.SoIndexedFaceSet()
+			ifs.coordIndex.setValues(0, len(coord_index), coord_index)
+			n.addChild(ifs)
+
 			n0.addChild(n)
-			
-			
+
 		return n0
-
-

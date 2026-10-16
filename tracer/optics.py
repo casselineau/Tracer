@@ -202,10 +202,17 @@ def refr_idx_hartmann(wavelength, a, b, c, d, e):
 	"""
 	return a + b/(c - wavelength) + d/(e - wavelength)
 
+def attenuations_mu(path_lengths, mu, energy):
+	'''
+	Calculates energy attenuation from the wavelength in vacuum (lambda 0), the absorption index (complex part of the complex refractive index, k) and the path length.
+	'''
+	T = N.exp(- path_lengths * mu)
+	energy = T * energy
+	return energy
+
 def attenuations(path_lengths, k, lambda_0, energy):
 	'''
 	Calculates energy attenuation from the wavelength in vacuum (lambda 0), the absorption index (complex part of the complex refractive index, k) and the path length.
-	
 	'''
 	T = N.exp(-4.*N.pi*path_lengths*k/lambda_0)
 	energy = T*energy

@@ -51,6 +51,7 @@ def MCRT_to_CI(fun, target_CI, num_samples, n_sigmas=3., *args, **kwargs):
 	while estimator.get_CI()>target_CI:
 		samples = fun(num_rays=num_samples, *args, **kwargs)
 		estimator.update(samples, num_samples=num_samples)
-		print ('Mean: %5.5f, CI: %.5f -> %.5f \033[F'%(estimator.mean, estimator.get_CI(), target_CI))
+		print ('Mean: %5.5f, CI: %.5f -> %.5f'%(estimator.mean, estimator.get_CI(), target_CI), end='\r')
+	print ('\n')
 	return estimator
 

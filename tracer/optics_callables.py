@@ -884,7 +884,11 @@ class Absorbant(object):
 			energy = optics.attenuations(path_lengths=path_lengths, k=new_bundle.get_ref_index().imag, lambda_0=new_bundle.get_wavelengths(), energy=new_bundle.get_energy())
 		else:
 			if len(self.a_c)>1:
-				which = N.array(previous_bundle.get_ref_index(new_bundle.get_parents())==self._ref_idxs[1], dtype=int)
+				if hasattr(self, '_ref_idxs'):
+					which = N.array(previous_bundle.get_ref_index(new_bundle.get_parents())==self._ref_idxs[1], dtype=int)
+				else:
+					ref_1 = self._materials[1].m(new_bundle.get_wavelengths())
+					which = N.array(previous_bundle.get_ref_index(new_bundle.get_parents())==ref_1, dtype=int)
 				a_c = self.a_c[which]
 			else:
 				a_c = self.a_c
@@ -2046,7 +2050,7 @@ def make_polychromatic_accountant_class(name, parent):
 def make_accountant_classes(optical_class):
 	for accs in mixed_accountants:
 		names = [a().shorthand for a in accs]
-		accountant_name = ''.join(names)
+		accountant_name = ''.join(names[::-1])
 		newclass = optical_class.__name__ + accountant_name
 		make_mixed_accountant_class(newclass, accs, optical_class)
 		alias_check = [k for k in aliases.keys() if all(ak in accountant_name for ak in aliases[k])]

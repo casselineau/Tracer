@@ -13,7 +13,7 @@ def save_hist_data_csv(hist, bins, hist_label, bins_label, info_header, saveloc,
     if dims == 2:
         bins_x = bins[0]
         bins_y = bins[1]
-
+    print (hist_label)
     # Write fluxmap to file
     with open(saveloc, 'w') as fo:
         fo.write(info_header)
@@ -49,7 +49,6 @@ def load_hist_data_csv(fluxmap_file, separator=','):
         data = fo.readlines()
 
     print('Data information:\n', data[0]) # Info header
-
     bins = []
     bins_label = []
     load_data = []
