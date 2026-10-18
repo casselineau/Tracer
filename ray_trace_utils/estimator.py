@@ -38,20 +38,23 @@ class Estimator(object):
 		CI[stdev==0.] = 0.
 		return CI
 
-def MCRT_to_CI(fun, target_CI, num_samples, n_sigmas=3., *args, **kwargs):
+def MCRT_to_CI(fun, target_CI, num_samples, n_sigmas=3., relative_CIs=True, *args, **kwargs):
 	'''
 	This function automates a Monte-Carlo simulation until a confidence interval is reached.
 	:param fun: ray-tracing function
-	:param num_samples: number of rays er iteration
+	:param num_samples: number of rays per iteration
 	:param target_CI: targeted confidence interval
 	:param n_sigmas: number of sigmas
+	:param args: fun positional arguments
+	:param kwargs: fun keyword arguments
 	:return:
 	'''
-	estimator = Estimator(n_sigmas)
-	while estimator.get_CI()>target_CI:
+	estimator = Estimator(n_sigmas, relative_CIs)
+	while (estimator.get_CI()>target_CI).any():
 		samples = fun(num_rays=num_samples, *args, **kwargs)
 		estimator.update(samples, num_samples=num_samples)
-		print ('Mean: %5.5f, CI: %.5f -> %.5f'%(estimator.mean, estimator.get_CI(), target_CI), end='\r')
+		print('Mean:', estimator.mean)
+		print('CI:', estimator.get_CI(), '->', target_CI)
 	print ('\n')
 	return estimator
 

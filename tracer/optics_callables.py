@@ -290,7 +290,7 @@ class Reflective_IAM(Reflective, IAM):
 	def __init__(self, absorptivity, a_r, c=1):
 		self._abs = absorptivity
 		self.a_r = a_r
-		Reflective.__init__(self, absorptivity)
+		Reflective.__init__(self, absorptivity=0.)
 		IAM.__init__(self, a_r, c)
 	
 	def __call__(self, geometry, rays, selector):
@@ -1576,6 +1576,9 @@ class OpticsCallable(object):
 		optics - the optics manager class to actually use with input attributes (*args, **kwargs)
 		"""
 		self._opt = optics(*args, **kwargs)
+
+	def get_optics(self):
+		return self._opt
 
 	def __call__(self, geometry, rays, selector):
 		newb = self._opt(geometry, rays, selector)

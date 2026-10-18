@@ -574,8 +574,9 @@ def triangular_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux
 		direction = normal
 	
 	# Rotate to a frame in which <direction> is direction:
-	rot = rotation_to_z(direction)
-	directions = N.sum(rot[...,None] * a[None,...], axis=1)
+	#rot = rotation_to_z(direction)
+	#directions = N.sum(rot[...,None] * a[None,...], axis=1)
+	directions = rotate_z_to_normal(a, direction)
 
 	rayb = RayBundle()
 
